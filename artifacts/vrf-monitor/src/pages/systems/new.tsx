@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Loader2, Server } from "lucide-react";
+import { ArrowLeft, Loader2, Server, Building2, Droplets, Wind } from "lucide-react";
 import { Link } from "wouter";
 
 const VRF_TYPES = {
@@ -28,6 +28,8 @@ type VrfTypeKey = keyof typeof VRF_TYPES;
 const systemSchema = z.object({
   code: z.string().min(1, "Codigo obrigatorio"),
   name: z.string().min(1, "Nome obrigatorio"),
+  building: z.string().optional(),
+  condensationType: z.enum(["air", "water"]).optional(),
   location: z.string().optional(),
   floor: z.string().optional(),
   servedArea: z.string().optional(),
@@ -46,6 +48,18 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+function SectionHeader({ icon: Icon, title, color }: { icon: React.ElementType; title: string; color?: string }) {
+  return (
+    <div className="flex items-center gap-3 pb-1">
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: color ? `${color}18` : 'rgba(255,98,0,0.12)' }}>
+        <Icon className="h-3.5 w-3.5" style={{ color: color ?? '#FF6200' }} />
+      </div>
+      <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground/70">{title}</span>
+      <div className="flex-1 h-px bg-border/40" />
+    </div>
+  );
+}
+
 export default function NewSystem() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -54,7 +68,7 @@ export default function NewSystem() {
   const form = useForm<SystemFormValues>({
     resolver: zodResolver(systemSchema),
     defaultValues: {
-      code: "", name: "", location: "", floor: "", servedArea: "",
+      code: "", name: "", building: "", location: "", floor: "", servedArea: "",
       model: "", vrfType: "multi_v_5", startupDate: "", notes: "",
     },
   });
@@ -66,7 +80,7 @@ export default function NewSystem() {
         setLocation(`/systems/${system.id}`);
       },
       onError: () => {
-        toast({ title: "Erro ao cadastrar", description: "Nao foi possivel cadastrar o sistema. Tente novamente.", variant: "destructive" });
+        toast({ title: "Erro ao cadastrar", description: "Nao foi possivel cadastrar o sistema.", variant: "destructive" });
       }
     });
   }
@@ -86,129 +100,154 @@ export default function NewSystem() {
       </div>
 
       <Card className="border-border/50 bg-card">
-        {/* Card header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,98,0,0.12)' }}>
-            <Server className="h-4 w-4" style={{ color: '#FF6200' }} />
-          </div>
-          <span className="text-sm font-bold">Informacoes do Sistema</span>
-        </div>
-
         <CardContent className="p-6">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Row 1 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormField control={form.control} name="code" render={({ field }) => (
-                  <FormItem>
-                    <FieldLabel>Codigo do Sistema</FieldLabel>
-                    <FormControl>
-                      <Input placeholder="IST-1286-17" className="bg-muted/20 border-border/50 font-mono" {...field} />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="name" render={({ field }) => (
-                  <FormItem>
-                    <FieldLabel>Nome / Identificacao</FieldLabel>
-                    <FormControl>
-                      <Input placeholder="Bloco A - Sistema 01" className="bg-muted/20 border-border/50" {...field} />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )} />
-              </div>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-7">
 
-              {/* Row 2 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormField control={form.control} name="vrfType" render={({ field }) => (
-                  <FormItem>
-                    <FieldLabel>Tipo VRF</FieldLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+              {/* Edificio */}
+              <div className="space-y-4">
+                <SectionHeader icon={Building2} title="Edificio / Localidade" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <FormField control={form.control} name="building" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Nome do Edificio</FieldLabel>
                       <FormControl>
-                        <SelectTrigger className="bg-muted/20 border-border/50">
-                          <SelectValue placeholder="Selecione o tipo" />
-                        </SelectTrigger>
+                        <Input placeholder="Escritorio RLJ" className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
                       </FormControl>
-                      <SelectContent>
-                        {(Object.entries(VRF_TYPES) as [VrfTypeKey, string][]).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>{label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="condensationType" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Tipo de Condensacao</FieldLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                        <FormControl>
+                          <SelectTrigger className="bg-muted/20 border-border/50">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="air">
+                            <span className="flex items-center gap-2"><Wind className="h-3.5 w-3.5 text-cyan-400" />Condensacao a Ar</span>
+                          </SelectItem>
+                          <SelectItem value="water">
+                            <span className="flex items-center gap-2"><Droplets className="h-3.5 w-3.5 text-sky-400" />Condensacao a Agua</span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                </div>
+              </div>
+
+              {/* Identificacao */}
+              <div className="space-y-4">
+                <SectionHeader icon={Server} title="Identificacao do Sistema" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <FormField control={form.control} name="code" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Codigo do Sistema</FieldLabel>
+                      <FormControl>
+                        <Input placeholder="IST-1286-17" className="bg-muted/20 border-border/50 font-mono" {...field} />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Nome / Identificacao</FieldLabel>
+                      <FormControl>
+                        <Input placeholder="Bloco A - Sistema 01" className="bg-muted/20 border-border/50" {...field} />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <FormField control={form.control} name="vrfType" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Tipo VRF</FieldLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-muted/20 border-border/50">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {(Object.entries(VRF_TYPES) as [VrfTypeKey, string][]).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="model" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Modelo (Unidade Mestre)</FieldLabel>
+                      <FormControl>
+                        <Input placeholder="CRNU260LTE5" className="bg-muted/20 border-border/50 font-mono" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                </div>
+                <FormField control={form.control} name="location" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Localizacao / Endereco</FieldLabel>
+                    <FormControl>
+                      <Input placeholder="Av. Presidente JK, 1909 - Vila Olimpia, SP" className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
+                    </FormControl>
                     <FormMessage className="text-xs" />
                   </FormItem>
                 )} />
-                <FormField control={form.control} name="model" render={({ field }) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <FormField control={form.control} name="floor" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Andar</FieldLabel>
+                      <FormControl>
+                        <Input placeholder="12, Cobertura, Subsolo..." className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="servedArea" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Sistema Atende</FieldLabel>
+                      <FormControl>
+                        <Input placeholder="Sala de reunioes, TI..." className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <FormField control={form.control} name="startupDate" render={({ field }) => (
+                    <FormItem>
+                      <FieldLabel>Data de Partida</FieldLabel>
+                      <FormControl>
+                        <Input type="date" className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )} />
+                </div>
+                <FormField control={form.control} name="notes" render={({ field }) => (
                   <FormItem>
-                    <FieldLabel>Modelo (Unidade Mestre)</FieldLabel>
+                    <FieldLabel>Observacoes</FieldLabel>
                     <FormControl>
-                      <Input placeholder="CRNU260LTE5" className="bg-muted/20 border-border/50 font-mono" {...field} value={field.value || ""} />
+                      <Textarea
+                        placeholder="Detalhes da instalacao, configuracoes especificas..."
+                        className="bg-muted/20 border-border/50 resize-none h-24"
+                        {...field}
+                        value={field.value || ""}
+                      />
                     </FormControl>
                     <FormMessage className="text-xs" />
                   </FormItem>
                 )} />
               </div>
-
-              {/* Location */}
-              <FormField control={form.control} name="location" render={({ field }) => (
-                <FormItem>
-                  <FieldLabel>Localizacao / Endereco</FieldLabel>
-                  <FormControl>
-                    <Input placeholder="Av. Presidente JK, 1909 - Vila Olimpia, SP" className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
-                  </FormControl>
-                  <FormMessage className="text-xs" />
-                </FormItem>
-              )} />
-
-              {/* Floor + Area */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormField control={form.control} name="floor" render={({ field }) => (
-                  <FormItem>
-                    <FieldLabel>Andar</FieldLabel>
-                    <FormControl>
-                      <Input placeholder="12, Cobertura, Subsolo..." className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="servedArea" render={({ field }) => (
-                  <FormItem>
-                    <FieldLabel>Sistema Atende</FieldLabel>
-                    <FormControl>
-                      <Input placeholder="Sala de reunioes, TI..." className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )} />
-              </div>
-
-              {/* Startup date */}
-              <FormField control={form.control} name="startupDate" render={({ field }) => (
-                <FormItem>
-                  <FieldLabel>Data de Partida</FieldLabel>
-                  <FormControl>
-                    <Input type="date" className="bg-muted/20 border-border/50 w-full sm:w-1/2" {...field} value={field.value || ""} />
-                  </FormControl>
-                  <FormMessage className="text-xs" />
-                </FormItem>
-              )} />
-
-              {/* Notes */}
-              <FormField control={form.control} name="notes" render={({ field }) => (
-                <FormItem>
-                  <FieldLabel>Observacoes</FieldLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Detalhes da instalacao, configuracoes especificas..."
-                      className="bg-muted/20 border-border/50 resize-none h-24"
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  <FormMessage className="text-xs" />
-                </FormItem>
-              )} />
 
               <div className="flex justify-end pt-2">
                 <Button

@@ -14,7 +14,7 @@ import { ptBR } from "date-fns/locale";
 import {
   ArrowLeft, MapPin, Server, Calendar, Upload, FileText,
   Activity, Trash2, Plus, AlertCircle, FilePlus, ChevronRight,
-  Layers, Radio, BrainCircuit,
+  Layers, Radio, BrainCircuit, Building2, Droplets, Wind,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRef, useState } from "react";
@@ -135,6 +135,14 @@ export default function SystemDetail() {
             <span className="text-sm font-bold">Dados do Sistema</span>
           </div>
           <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {system.building && <InfoRow label="Edificio" value={system.building} icon={Building2} />}
+            {system.condensationType && (
+              <InfoRow
+                label="Tipo de Condensacao"
+                value={system.condensationType === "water" ? "Condensacao a Agua" : "Condensacao a Ar"}
+                icon={system.condensationType === "water" ? Droplets : Wind}
+              />
+            )}
             {system.model && <InfoRow label="Modelo" value={system.model} icon={Server} />}
             <InfoRow label="Tipo VRF" value={system.vrfType.replace(/_/g, " ").toUpperCase()} icon={Activity} />
             {system.location && <InfoRow label="Localizacao" value={system.location} icon={MapPin} />}

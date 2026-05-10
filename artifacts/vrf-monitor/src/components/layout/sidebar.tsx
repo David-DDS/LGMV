@@ -5,43 +5,24 @@ import { useState } from "react";
 
 function XPIncLogo() {
   return (
-    <div className="flex items-center select-none" style={{ gap: '5px' }}>
-      <span
-        style={{
-          fontFamily: 'Inter, system-ui, sans-serif',
-          fontWeight: 900,
-          fontSize: '22px',
-          color: '#ffffff',
-          letterSpacing: '-0.05em',
-          lineHeight: 1,
-        }}
-      >
-        XP
-      </span>
-      {/* Diagonal slash — the distinctive separator in the real logo */}
-      <span
-        style={{
-          display: 'inline-block',
-          width: '2px',
-          height: '19px',
-          background: '#ffffff',
-          transform: 'rotate(-18deg)',
-          borderRadius: '1px',
-          flexShrink: 0,
-          opacity: 0.95,
-        }}
+    <div className="flex items-center gap-2.5 select-none">
+      <img
+        src="/xp-logo.png"
+        alt="XP"
+        className="h-9 w-9 object-contain rounded-lg"
+        style={{ imageRendering: 'auto' }}
       />
       <span
         style={{
           fontFamily: 'Inter, system-ui, sans-serif',
-          fontWeight: 800,
-          fontSize: '22px',
-          color: '#ffffff',
-          letterSpacing: '-0.04em',
+          fontWeight: 700,
+          fontSize: '13px',
+          color: 'rgba(255,255,255,0.55)',
+          letterSpacing: '0.02em',
           lineHeight: 1,
         }}
       >
-        Inc.
+        Monitor VRF
       </span>
     </div>
   );

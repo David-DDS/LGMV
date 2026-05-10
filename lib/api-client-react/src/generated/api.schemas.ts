@@ -22,6 +22,18 @@ export const VrfSystemVrfType = {
 /**
  * @nullable
  */
+export type VrfSystemCondensationType =
+  | (typeof VrfSystemCondensationType)[keyof typeof VrfSystemCondensationType]
+  | null;
+
+export const VrfSystemCondensationType = {
+  air: "air",
+  water: "water",
+} as const;
+
+/**
+ * @nullable
+ */
 export type VrfSystemHealthStatus =
   | (typeof VrfSystemHealthStatus)[keyof typeof VrfSystemHealthStatus]
   | null;
@@ -48,6 +60,10 @@ export interface VrfSystem {
   /** @nullable */
   startupDate?: string | null;
   /** @nullable */
+  building?: string | null;
+  /** @nullable */
+  condensationType?: VrfSystemCondensationType;
+  /** @nullable */
   notes?: string | null;
   /** @nullable */
   healthStatus?: VrfSystemHealthStatus;
@@ -66,6 +82,14 @@ export const VrfSystemInputVrfType = {
   multi_v_5: "multi_v_5",
 } as const;
 
+export type VrfSystemInputCondensationType =
+  (typeof VrfSystemInputCondensationType)[keyof typeof VrfSystemInputCondensationType];
+
+export const VrfSystemInputCondensationType = {
+  air: "air",
+  water: "water",
+} as const;
+
 export interface VrfSystemInput {
   /** @minLength 1 */
   code: string;
@@ -77,6 +101,8 @@ export interface VrfSystemInput {
   model?: string;
   vrfType: VrfSystemInputVrfType;
   startupDate?: string;
+  building?: string;
+  condensationType?: VrfSystemInputCondensationType;
   notes?: string;
 }
 
@@ -90,6 +116,14 @@ export const VrfSystemUpdateVrfType = {
   multi_v_5: "multi_v_5",
 } as const;
 
+export type VrfSystemUpdateCondensationType =
+  (typeof VrfSystemUpdateCondensationType)[keyof typeof VrfSystemUpdateCondensationType];
+
+export const VrfSystemUpdateCondensationType = {
+  air: "air",
+  water: "water",
+} as const;
+
 export interface VrfSystemUpdate {
   code?: string;
   name?: string;
@@ -99,6 +133,8 @@ export interface VrfSystemUpdate {
   model?: string;
   vrfType?: VrfSystemUpdateVrfType;
   startupDate?: string;
+  building?: string;
+  condensationType?: VrfSystemUpdateCondensationType;
   notes?: string;
 }
 

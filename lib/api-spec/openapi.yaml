@@ -382,6 +382,11 @@ components:
           enum: [multi_v_ii, multi_v_iii, multi_v_iv, multi_v_5]
         startupDate:
           type: ["string", "null"]
+        building:
+          type: ["string", "null"]
+        condensationType:
+          type: ["string", "null"]
+          enum: [air, water, null]
         notes:
           type: ["string", "null"]
         healthStatus:
@@ -415,6 +420,11 @@ components:
           enum: [multi_v_ii, multi_v_iii, multi_v_iv, multi_v_5]
         startupDate:
           type: string
+        building:
+          type: string
+        condensationType:
+          type: string
+          enum: [air, water]
         notes:
           type: string
 
@@ -438,6 +448,11 @@ components:
           enum: [multi_v_ii, multi_v_iii, multi_v_iv, multi_v_5]
         startupDate:
           type: string
+        building:
+          type: string
+        condensationType:
+          type: string
+          enum: [air, water]
         notes:
           type: string
 

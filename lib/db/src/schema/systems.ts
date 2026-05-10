@@ -12,6 +12,8 @@ export const vrfSystemsTable = pgTable("vrf_systems", {
   model: text("model"),
   vrfType: text("vrf_type").notNull().default("multi_v_5"),
   startupDate: text("startup_date"),
+  building: text("building"),
+  condensationType: text("condensation_type"),
   notes: text("notes"),
   healthStatus: text("health_status"),
   lastReadingDate: text("last_reading_date"),

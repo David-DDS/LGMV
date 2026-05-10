@@ -28,6 +28,10 @@ export const ListSystemsResponseItem = zod.object({
   model: zod.string().nullish(),
   vrfType: zod.enum(["multi_v_ii", "multi_v_iii", "multi_v_iv", "multi_v_5"]),
   startupDate: zod.string().nullish(),
+  building: zod.string().nullish(),
+  condensationType: zod
+    .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
+    .nullish(),
   notes: zod.string().nullish(),
   healthStatus: zod
     .union([
@@ -55,6 +59,8 @@ export const CreateSystemBody = zod.object({
   model: zod.string().optional(),
   vrfType: zod.enum(["multi_v_ii", "multi_v_iii", "multi_v_iv", "multi_v_5"]),
   startupDate: zod.string().optional(),
+  building: zod.string().optional(),
+  condensationType: zod.enum(["air", "water"]).optional(),
   notes: zod.string().optional(),
 });
 
@@ -105,6 +111,10 @@ export const GetSystemResponse = zod.object({
   model: zod.string().nullish(),
   vrfType: zod.enum(["multi_v_ii", "multi_v_iii", "multi_v_iv", "multi_v_5"]),
   startupDate: zod.string().nullish(),
+  building: zod.string().nullish(),
+  condensationType: zod
+    .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
+    .nullish(),
   notes: zod.string().nullish(),
   healthStatus: zod
     .union([
@@ -136,6 +146,8 @@ export const UpdateSystemBody = zod.object({
     .enum(["multi_v_ii", "multi_v_iii", "multi_v_iv", "multi_v_5"])
     .optional(),
   startupDate: zod.string().optional(),
+  building: zod.string().optional(),
+  condensationType: zod.enum(["air", "water"]).optional(),
   notes: zod.string().optional(),
 });
 
@@ -149,6 +161,10 @@ export const UpdateSystemResponse = zod.object({
   model: zod.string().nullish(),
   vrfType: zod.enum(["multi_v_ii", "multi_v_iii", "multi_v_iv", "multi_v_5"]),
   startupDate: zod.string().nullish(),
+  building: zod.string().nullish(),
+  condensationType: zod
+    .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
+    .nullish(),
   notes: zod.string().nullish(),
   healthStatus: zod
     .union([
@@ -187,6 +203,10 @@ export const GetSystemSummaryResponse = zod.object({
     model: zod.string().nullish(),
     vrfType: zod.enum(["multi_v_ii", "multi_v_iii", "multi_v_iv", "multi_v_5"]),
     startupDate: zod.string().nullish(),
+    building: zod.string().nullish(),
+    condensationType: zod
+      .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
+      .nullish(),
     notes: zod.string().nullish(),
     healthStatus: zod
       .union([

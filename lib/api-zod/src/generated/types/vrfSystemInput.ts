@@ -5,6 +5,7 @@
  * VRF Monitor LG - API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VrfSystemInputCondensationType } from "./vrfSystemInputCondensationType";
 import type { VrfSystemInputVrfType } from "./vrfSystemInputVrfType";
 
 export interface VrfSystemInput {
@@ -18,5 +19,7 @@ export interface VrfSystemInput {
   model?: string;
   vrfType: VrfSystemInputVrfType;
   startupDate?: string;
+  building?: string;
+  condensationType?: VrfSystemInputCondensationType;
   notes?: string;
 }
