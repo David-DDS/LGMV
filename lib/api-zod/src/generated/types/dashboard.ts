@@ -5,6 +5,7 @@
  * VRF Monitor LG - API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BuildingSummary } from "./buildingSummary";
 import type { ReadingSession } from "./readingSession";
 
 export interface Dashboard {
@@ -14,4 +15,5 @@ export interface Dashboard {
   criticalSystems: number;
   unknownSystems?: number;
   recentSessions: ReadingSession[];
+  buildings: BuildingSummary[];
 }

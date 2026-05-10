@@ -2,7 +2,8 @@ import { useRoute, Link, useLocation } from "wouter";
 import {
   useGetSystem, useGetSystemSummary, useListStartupReports,
   useListReadingSessions, useDeleteSystem,
-  getListStartupReportsQueryKey, getListReadingSessionsQueryKey,
+  useDeleteStartupReport, useReprocessStartupReport,
+  getListStartupReportsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import {
   ArrowLeft, MapPin, Server, Calendar, Upload, FileText,
   Activity, Trash2, Plus, AlertCircle, FilePlus, ChevronRight,
   Layers, Radio, BrainCircuit, Building2, Droplets, Wind,
+  RotateCw, X, FileCheck,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRef, useState } from "react";
@@ -49,21 +51,39 @@ export default function SystemDetail() {
   const [isUploading, setIsUploading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const { data: system, isLoading: isLoadingSystem } = useGetSystem(systemId, { query: { enabled: !!systemId } });
-  const { data: summary } = useGetSystemSummary(systemId, { query: { enabled: !!systemId } });
-  const { data: reports, isLoading: isLoadingReports } = useListStartupReports(systemId, { query: { enabled: !!systemId } });
-  const { data: sessions, isLoading: isLoadingSessions } = useListReadingSessions(systemId, { query: { enabled: !!systemId } });
+  const { data: system, isLoading: isLoadingSystem } = useGetSystem(systemId, { query: { enabled: !!systemId } as never });
+  const { data: summary } = useGetSystemSummary(systemId, { query: { enabled: !!systemId } as never });
+  const { data: reports, isLoading: isLoadingReports } = useListStartupReports(systemId, {
+    query: {
+      enabled: !!systemId,
+      refetchInterval: (query: { state: { data?: Array<{ processingStatus: string }> } }) => {
+        const data = query.state.data;
+        const hasProcessing = Array.isArray(data) && data.some((r) => r.processingStatus === "processing" || r.processingStatus === "pending");
+        return hasProcessing ? 3000 : false;
+      },
+    } as never,
+  });
+  const { data: sessions, isLoading: isLoadingSessions } = useListReadingSessions(systemId, { query: { enabled: !!systemId } as never });
   const deleteSystem = useDeleteSystem();
+  const deleteReport = useDeleteStartupReport();
+  const reprocessReport = useReprocessStartupReport();
+  const [isDragging, setIsDragging] = useState(false);
 
-  const handleUploadReport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const uploadFile = async (file: File) => {
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast({ title: "Formato invalido", description: "Envie um arquivo PDF.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "Tamanho maximo: 50 MB.", variant: "destructive" });
+      return;
+    }
     setIsUploading(true);
     const formData = new FormData();
     formData.append("file", file);
     try {
       const response = await fetch(`/api/systems/${systemId}/startup-reports`, { method: "POST", body: formData });
-      if (!response.ok) throw new Error();
+      if (!response.ok) throw new Error(await response.text());
       toast({ title: "Relatorio enviado", description: "O relatorio de partida esta sendo processado pela IA." });
       queryClient.invalidateQueries({ queryKey: getListStartupReportsQueryKey(systemId) });
     } catch {
@@ -72,6 +92,38 @@ export default function SystemDetail() {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleUploadReport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await uploadFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadFile(file);
+  };
+
+  const handleDeleteReport = (reportId: number) => {
+    deleteReport.mutate({ systemId, reportId }, {
+      onSuccess: () => {
+        toast({ title: "Relatorio removido" });
+        queryClient.invalidateQueries({ queryKey: getListStartupReportsQueryKey(systemId) });
+      },
+      onError: () => toast({ title: "Erro ao remover relatorio", variant: "destructive" }),
+    });
+  };
+
+  const handleReprocessReport = (reportId: number) => {
+    reprocessReport.mutate({ systemId, reportId }, {
+      onSuccess: () => {
+        toast({ title: "Reprocessando", description: "A IA esta analisando o relatorio novamente." });
+        queryClient.invalidateQueries({ queryKey: getListStartupReportsQueryKey(systemId) });
+      },
+      onError: () => toast({ title: "Erro ao reprocessar", description: "O arquivo original pode nao estar mais disponivel.", variant: "destructive" }),
+    });
   };
 
   const handleDelete = () => {
@@ -269,17 +321,46 @@ export default function SystemDetail() {
         <TabsContent value="reports" className="mt-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold">Relatorios de Partida</h2>
-            <div>
-              <input type="file" accept="application/pdf" className="hidden" ref={fileInputRef} onChange={handleUploadReport} />
-              <Button size="sm" className="font-semibold" onClick={() => fileInputRef.current?.click()} disabled={isUploading}
-                style={{ background: 'linear-gradient(135deg, #FF6200, #FF8C42)' }}>
-                {isUploading ? (
-                  <><div className="h-4 w-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" />Enviando...</>
-                ) : (
-                  <><Upload className="h-4 w-4 mr-2" />Enviar PDF</>
-                )}
-              </Button>
+            <input type="file" accept="application/pdf,.pdf" className="hidden" ref={fileInputRef} onChange={handleUploadReport} />
+          </div>
+
+          {/* Drag-and-drop dropzone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => !isUploading && fileInputRef.current?.click()}
+            className={`relative rounded-xl border-2 border-dashed transition-all cursor-pointer p-6 flex items-center gap-4 ${
+              isDragging
+                ? "border-[#FF6200] bg-[#FF6200]/5"
+                : isUploading
+                  ? "border-border/40 bg-muted/10 cursor-wait"
+                  : "border-border/40 bg-card/40 hover:border-[#FF6200]/50 hover:bg-[#FF6200]/[0.03]"
+            }`}
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+              isDragging ? "bg-[#FF6200]/20" : "bg-muted/30 border border-border/40"
+            }`}>
+              {isUploading ? (
+                <div className="h-5 w-5 border-2 border-[#FF6200]/30 border-t-[#FF6200] rounded-full animate-spin" />
+              ) : (
+                <Upload className={`h-5 w-5 ${isDragging ? "text-[#FF6200]" : "text-muted-foreground/60"}`} />
+              )}
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm">
+                {isUploading ? "Enviando..." : isDragging ? "Solte o arquivo aqui" : "Arraste um PDF ou clique para selecionar"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Apenas arquivos PDF, ate 50 MB. A IA extrai o baseline automaticamente.
+              </p>
+            </div>
+            {!isUploading && !isDragging && (
+              <Button size="sm" type="button" className="font-semibold pointer-events-none shrink-0"
+                style={{ background: 'linear-gradient(135deg, #FF6200, #FF8C42)' }}>
+                <FilePlus className="h-4 w-4 mr-2" />Selecionar
+              </Button>
+            )}
           </div>
 
           {isLoadingReports ? (
@@ -287,57 +368,87 @@ export default function SystemDetail() {
               {[1,2].map(i => <Skeleton key={i} className="h-16 w-full bg-muted/40 rounded-xl" />)}
             </div>
           ) : !reports || reports.length === 0 ? (
-            <Card className="border-dashed border-border/40 bg-transparent">
-              <CardContent className="flex flex-col items-center justify-center p-10 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-muted/20 flex items-center justify-center mb-4">
-                  <FilePlus className="h-6 w-6 text-muted-foreground/30" />
-                </div>
-                <h3 className="font-bold text-sm">Nenhum relatorio de partida</h3>
-                <p className="text-xs text-muted-foreground mt-1 mb-4 max-w-xs">
-                  Envie o PDF para estabelecer o baseline do sistema.
-                </p>
-                <Button variant="outline" size="sm" className="border-border/50" onClick={() => fileInputRef.current?.click()}>
-                  Enviar Relatorio
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="text-center py-6 text-xs text-muted-foreground/60">
+              Nenhum relatorio enviado ainda.
+            </div>
           ) : (
             <div className="space-y-2">
-              {reports.map((report) => (
-                <Card key={report.id} className="border-border/50 bg-card">
-                  <CardContent className="p-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-muted/30 border border-border/40 flex items-center justify-center shrink-0">
-                        <FileText className="h-5 w-5 text-muted-foreground/60" />
+              {reports.map((report) => {
+                const isError = report.processingStatus === "error";
+                const isProcessing = report.processingStatus === "pending" || report.processingStatus === "processing";
+                const isDone = report.processingStatus === "done";
+                return (
+                  <Card key={report.id} className={`border-border/50 bg-card ${isError ? "border-red-400/30" : ""}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${
+                            isError ? "bg-red-400/10 border-red-400/20" :
+                            isDone ? "bg-emerald-400/10 border-emerald-400/20" :
+                            "bg-muted/30 border-border/40"
+                          }`}>
+                            {isError ? <AlertCircle className="h-5 w-5 text-red-400" /> :
+                             isDone ? <FileCheck className="h-5 w-5 text-emerald-400" /> :
+                             <FileText className="h-5 w-5 text-muted-foreground/60" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <a href={report.fileUrl} target="_blank" rel="noopener noreferrer"
+                              className="font-semibold text-sm truncate hover:text-[#FF6200] transition-colors block">
+                              {report.filename}
+                            </a>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {format(new Date(report.uploadedAt), "d 'de' MMM 'de' yyyy 'as' HH:mm", { locale: ptBR })}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isProcessing ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
+                              <div className="h-2.5 w-2.5 border-[1.5px] border-current border-t-transparent rounded-full animate-spin" />
+                              Processando
+                            </span>
+                          ) : isDone ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-full border border-emerald-400/20">
+                              <Activity className="h-2.5 w-2.5" />
+                              Analisado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-red-400 bg-red-400/10 px-2.5 py-1 rounded-full border border-red-400/20">
+                              <AlertCircle className="h-2.5 w-2.5" />
+                              Erro
+                            </span>
+                          )}
+                          {(isError || isDone) && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-[#FF6200]"
+                              title="Reprocessar" onClick={() => handleReprocessReport(report.id)}
+                              disabled={reprocessReport.isPending}>
+                              <RotateCw className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {!isProcessing && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-red-400"
+                              title="Remover" onClick={() => handleDeleteReport(report.id)}
+                              disabled={deleteReport.isPending}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">{report.filename}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {format(new Date(report.uploadedAt), "d 'de' MMM 'de' yyyy", { locale: ptBR })}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="shrink-0">
-                      {report.processingStatus === "pending" || report.processingStatus === "processing" ? (
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
-                          <div className="h-2.5 w-2.5 border-[1.5px] border-current border-t-transparent rounded-full animate-spin" />
-                          Processando
-                        </span>
-                      ) : report.processingStatus === "done" ? (
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-full border border-emerald-400/20">
-                          <Activity className="h-2.5 w-2.5" />
-                          Analisado
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-red-400 bg-red-400/10 px-2.5 py-1 rounded-full border border-red-400/20">
-                          <AlertCircle className="h-2.5 w-2.5" />
-                          Erro
-                        </span>
+                      {isError && report.errorMessage && (
+                        <div className="mt-3 ml-14 px-3 py-2 rounded-lg bg-red-400/5 border border-red-400/15 text-[11px] text-red-300/90 leading-relaxed">
+                          <span className="font-semibold text-red-400">Detalhe do erro: </span>
+                          {report.errorMessage}
+                        </div>
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      {isDone && report.extractedData && (
+                        <div className="mt-3 ml-14 text-[11px] text-emerald-400/80">
+                          Baseline extraido com sucesso pela IA.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>

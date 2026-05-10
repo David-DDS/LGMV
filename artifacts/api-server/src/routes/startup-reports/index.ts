@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
@@ -9,6 +9,8 @@ import {
   ListStartupReportsParams,
   UploadStartupReportParams,
   GetStartupReportParams,
+  DeleteStartupReportParams,
+  ReprocessStartupReportParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "../../lib/logger";
@@ -122,6 +124,111 @@ router.get("/systems/:systemId/startup-reports/:reportId", async (req, res): Pro
     extractedData: report.extractedData ? JSON.parse(report.extractedData) : null,
   });
 });
+
+router.delete("/systems/:systemId/startup-reports/:reportId", async (req, res): Promise<void> => {
+  const params = DeleteStartupReportParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [report] = await db
+    .select()
+    .from(startupReportsTable)
+    .where(
+      and(
+        eq(startupReportsTable.id, params.data.reportId),
+        eq(startupReportsTable.systemId, params.data.systemId)
+      )
+    );
+
+  // Idempotent: 204 either way
+  if (!report) {
+    res.sendStatus(204);
+    return;
+  }
+
+  // Best-effort filesystem cleanup
+  if (report.fileUrl) {
+    const filename = path.basename(report.fileUrl);
+    const filePath = path.join(uploadsDir, filename);
+    fs.promises.unlink(filePath).catch(() => undefined);
+  }
+
+  await db
+    .delete(startupReportsTable)
+    .where(
+      and(
+        eq(startupReportsTable.id, params.data.reportId),
+        eq(startupReportsTable.systemId, params.data.systemId)
+      )
+    );
+  res.sendStatus(204);
+});
+
+router.post(
+  "/systems/:systemId/startup-reports/:reportId/reprocess",
+  async (req, res): Promise<void> => {
+    const params = ReprocessStartupReportParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const [report] = await db
+      .select()
+      .from(startupReportsTable)
+      .where(
+        and(
+          eq(startupReportsTable.id, params.data.reportId),
+          eq(startupReportsTable.systemId, params.data.systemId)
+        )
+      );
+
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const [system] = await db
+      .select()
+      .from(vrfSystemsTable)
+      .where(eq(vrfSystemsTable.id, report.systemId));
+
+    if (!system) {
+      res.status(404).json({ error: "System not found" });
+      return;
+    }
+
+    const filename = path.basename(report.fileUrl ?? "");
+    const filePath = path.join(uploadsDir, filename);
+
+    if (!filename || !fs.existsSync(filePath)) {
+      res.status(410).json({ error: "Original file is no longer available" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(startupReportsTable)
+      .set({ processingStatus: "processing", errorMessage: null })
+      .where(
+        and(
+          eq(startupReportsTable.id, params.data.reportId),
+          eq(startupReportsTable.systemId, params.data.systemId)
+        )
+      )
+      .returning();
+
+    processStartupReportAsync(updated.id, filePath, system.vrfType).catch((err) =>
+      logger.error({ err, reportId: updated.id }, "Failed to reprocess startup report")
+    );
+
+    res.json({
+      ...updated,
+      extractedData: updated.extractedData ? JSON.parse(updated.extractedData) : null,
+    });
+  }
+);
 
 async function processStartupReportAsync(reportId: number, filePath: string, vrfType: string) {
   try {

@@ -34,6 +34,27 @@ router.get("/systems/dashboard", async (_req, res): Promise<void> => {
     unknownSystems: systems.filter((s) => !s.healthStatus).length,
   };
 
+  // Group by building
+  const buildingMap = new Map<string, typeof systems>();
+  for (const s of systems) {
+    const key = s.building?.trim() || "Sem Edificio";
+    if (!buildingMap.has(key)) buildingMap.set(key, []);
+    buildingMap.get(key)!.push(s);
+  }
+
+  const buildings = Array.from(buildingMap.entries())
+    .map(([name, list]) => ({
+      name,
+      condensationType: list.find((s) => s.condensationType)?.condensationType ?? null,
+      systemCount: list.length,
+      healthySystems: list.filter((s) => s.healthStatus === "healthy").length,
+      warningSystems: list.filter((s) => s.healthStatus === "warning").length,
+      criticalSystems: list.filter((s) => s.healthStatus === "critical").length,
+      unknownSystems: list.filter((s) => !s.healthStatus).length,
+      systems: list,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const recentSessions = await db
     .select()
     .from(readingSessionsTable)
@@ -42,6 +63,7 @@ router.get("/systems/dashboard", async (_req, res): Promise<void> => {
 
   res.json({
     ...healthyCounts,
+    buildings,
     recentSessions,
   });
 });

@@ -979,6 +979,185 @@ export function useGetStartupReport<
 }
 
 /**
+ * @summary Delete a startup report
+ */
+export const getDeleteStartupReportUrl = (
+  systemId: number,
+  reportId: number,
+) => {
+  return `/api/systems/${systemId}/startup-reports/${reportId}`;
+};
+
+export const deleteStartupReport = async (
+  systemId: number,
+  reportId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteStartupReportUrl(systemId, reportId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteStartupReportMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteStartupReport>>,
+    TError,
+    { systemId: number; reportId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteStartupReport>>,
+  TError,
+  { systemId: number; reportId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteStartupReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteStartupReport>>,
+    { systemId: number; reportId: number }
+  > = (props) => {
+    const { systemId, reportId } = props ?? {};
+
+    return deleteStartupReport(systemId, reportId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteStartupReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteStartupReport>>
+>;
+
+export type DeleteStartupReportMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a startup report
+ */
+export const useDeleteStartupReport = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteStartupReport>>,
+    TError,
+    { systemId: number; reportId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteStartupReport>>,
+  TError,
+  { systemId: number; reportId: number },
+  TContext
+> => {
+  return useMutation(getDeleteStartupReportMutationOptions(options));
+};
+
+/**
+ * @summary Re-run AI processing on an existing startup report
+ */
+export const getReprocessStartupReportUrl = (
+  systemId: number,
+  reportId: number,
+) => {
+  return `/api/systems/${systemId}/startup-reports/${reportId}/reprocess`;
+};
+
+export const reprocessStartupReport = async (
+  systemId: number,
+  reportId: number,
+  options?: RequestInit,
+): Promise<StartupReport> => {
+  return customFetch<StartupReport>(
+    getReprocessStartupReportUrl(systemId, reportId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getReprocessStartupReportMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reprocessStartupReport>>,
+    TError,
+    { systemId: number; reportId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reprocessStartupReport>>,
+  TError,
+  { systemId: number; reportId: number },
+  TContext
+> => {
+  const mutationKey = ["reprocessStartupReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reprocessStartupReport>>,
+    { systemId: number; reportId: number }
+  > = (props) => {
+    const { systemId, reportId } = props ?? {};
+
+    return reprocessStartupReport(systemId, reportId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReprocessStartupReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reprocessStartupReport>>
+>;
+
+export type ReprocessStartupReportMutationError = ErrorType<void>;
+
+/**
+ * @summary Re-run AI processing on an existing startup report
+ */
+export const useReprocessStartupReport = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reprocessStartupReport>>,
+    TError,
+    { systemId: number; reportId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reprocessStartupReport>>,
+  TError,
+  { systemId: number; reportId: number },
+  TContext
+> => {
+  return useMutation(getReprocessStartupReportMutationOptions(options));
+};
+
+/**
  * @summary List reading sessions for a system
  */
 export const getListReadingSessionsUrl = (systemId: number) => {

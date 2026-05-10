@@ -173,6 +173,30 @@ export interface ReadingSession {
   createdAt: string;
 }
 
+/**
+ * @nullable
+ */
+export type BuildingSummaryCondensationType =
+  | (typeof BuildingSummaryCondensationType)[keyof typeof BuildingSummaryCondensationType]
+  | null;
+
+export const BuildingSummaryCondensationType = {
+  air: "air",
+  water: "water",
+} as const;
+
+export interface BuildingSummary {
+  name: string;
+  /** @nullable */
+  condensationType?: BuildingSummaryCondensationType;
+  systemCount: number;
+  healthySystems: number;
+  warningSystems: number;
+  criticalSystems: number;
+  unknownSystems: number;
+  systems: VrfSystem[];
+}
+
 export interface Dashboard {
   totalSystems: number;
   healthySystems: number;
@@ -180,6 +204,7 @@ export interface Dashboard {
   criticalSystems: number;
   unknownSystems?: number;
   recentSessions: ReadingSession[];
+  buildings: BuildingSummary[];
 }
 
 export type ParameterTrendValuesItem = {

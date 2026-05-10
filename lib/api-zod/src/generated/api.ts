@@ -92,6 +92,56 @@ export const GetDashboardResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  buildings: zod.array(
+    zod.object({
+      name: zod.string(),
+      condensationType: zod
+        .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
+        .nullish(),
+      systemCount: zod.number(),
+      healthySystems: zod.number(),
+      warningSystems: zod.number(),
+      criticalSystems: zod.number(),
+      unknownSystems: zod.number(),
+      systems: zod.array(
+        zod.object({
+          id: zod.number(),
+          code: zod.string(),
+          name: zod.string(),
+          location: zod.string().nullish(),
+          floor: zod.string().nullish(),
+          servedArea: zod.string().nullish(),
+          model: zod.string().nullish(),
+          vrfType: zod.enum([
+            "multi_v_ii",
+            "multi_v_iii",
+            "multi_v_iv",
+            "multi_v_5",
+          ]),
+          startupDate: zod.string().nullish(),
+          building: zod.string().nullish(),
+          condensationType: zod
+            .union([
+              zod.literal("air"),
+              zod.literal("water"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          notes: zod.string().nullish(),
+          healthStatus: zod
+            .union([
+              zod.literal("healthy"),
+              zod.literal("warning"),
+              zod.literal("critical"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          lastReadingDate: zod.string().nullish(),
+          createdAt: zod.string(),
+        }),
+      ),
+    }),
+  ),
 });
 
 /**
@@ -278,6 +328,33 @@ export const GetStartupReportParams = zod.object({
 });
 
 export const GetStartupReportResponse = zod.object({
+  id: zod.number(),
+  systemId: zod.number(),
+  filename: zod.string(),
+  fileUrl: zod.string().optional(),
+  uploadedAt: zod.string(),
+  processingStatus: zod.enum(["pending", "processing", "done", "error"]),
+  extractedData: zod.object({}).passthrough().nullish(),
+  errorMessage: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a startup report
+ */
+export const DeleteStartupReportParams = zod.object({
+  systemId: zod.coerce.number(),
+  reportId: zod.coerce.number(),
+});
+
+/**
+ * @summary Re-run AI processing on an existing startup report
+ */
+export const ReprocessStartupReportParams = zod.object({
+  systemId: zod.coerce.number(),
+  reportId: zod.coerce.number(),
+});
+
+export const ReprocessStartupReportResponse = zod.object({
   id: zod.number(),
   systemId: zod.number(),
   filename: zod.string(),

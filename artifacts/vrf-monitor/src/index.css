@@ -157,56 +157,10 @@
   --sidebar-accent-border: hsl(220 13% 16%);
 }
 
-/* LIGHT MODE override (keep for compatibility) */
-.light {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
-  --opaque-button-border-intensity: -8;
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
-
-  --background: 210 20% 97%;
-  --foreground: 222 47% 11%;
-  --border: 214 32% 88%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --card-border: 214 32% 88%;
-  --sidebar: 225 17% 6%;
-  --sidebar-foreground: 210 20% 85%;
-  --sidebar-border: 220 13% 11%;
-  --sidebar-primary: 23 100% 50%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 13% 12%;
-  --sidebar-accent-foreground: 210 20% 93%;
-  --sidebar-ring: 23 100% 50%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --popover-border: 214 32% 88%;
-  --primary: 23 100% 50%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 210 40% 95%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 95%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 210 40% 95%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --input: 214 32% 88%;
-  --ring: 23 100% 50%;
-  --chart-1: 142 76% 36%;
-  --chart-2: 38 92% 50%;
-  --chart-3: 0 84% 60%;
-  --chart-4: 210 40% 50%;
-  --chart-5: 280 65% 60%;
-
-  --primary-border: hsl(23 100% 44%);
-  --secondary-border: hsl(210 40% 88%);
-  --muted-border: hsl(210 40% 88%);
-  --accent-border: hsl(210 40% 88%);
-  --destructive-border: hsl(0 84% 52%);
-  --sidebar-primary-border: hsl(23 100% 44%);
-  --sidebar-accent-border: hsl(220 13% 16%);
+/* Dark mode is permanent — no light mode override.
+   Force color-scheme so native widgets (scrollbars, form controls) render dark. */
+html, :root {
+  color-scheme: dark;
 }
 
 @layer base {

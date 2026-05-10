@@ -8,6 +8,8 @@
 
 export * from "./analysisResult";
 export * from "./analysisResultHealthStatus";
+export * from "./buildingSummary";
+export * from "./buildingSummaryCondensationType";
 export * from "./dashboard";
 export * from "./healthStatus";
 export * from "./lgmvReading";

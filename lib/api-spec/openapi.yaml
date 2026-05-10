@@ -224,6 +224,50 @@ paths:
                 $ref: "#/components/schemas/StartupReport"
         "404":
           description: Not found
+    delete:
+      operationId: deleteStartupReport
+      tags: [startup-reports]
+      summary: Delete a startup report
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /systems/{systemId}/startup-reports/{reportId}/reprocess:
+    post:
+      operationId: reprocessStartupReport
+      tags: [startup-reports]
+      summary: Re-run AI processing on an existing startup report
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reprocessing started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartupReport"
+        "404":
+          description: Not found
 
   /systems/{systemId}/reading-sessions:
     get:
@@ -458,7 +502,7 @@ components:
 
     Dashboard:
       type: object
-      required: [totalSystems, healthySystems, warningSystems, criticalSystems, recentSessions]
+      required: [totalSystems, healthySystems, warningSystems, criticalSystems, recentSessions, buildings]
       properties:
         totalSystems:
           type: integer
@@ -474,6 +518,34 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ReadingSession"
+        buildings:
+          type: array
+          items:
+            $ref: "#/components/schemas/BuildingSummary"
+
+    BuildingSummary:
+      type: object
+      required: [name, systemCount, healthySystems, warningSystems, criticalSystems, unknownSystems, systems]
+      properties:
+        name:
+          type: string
+        condensationType:
+          type: ["string", "null"]
+          enum: [air, water, null]
+        systemCount:
+          type: integer
+        healthySystems:
+          type: integer
+        warningSystems:
+          type: integer
+        criticalSystems:
+          type: integer
+        unknownSystems:
+          type: integer
+        systems:
+          type: array
+          items:
+            $ref: "#/components/schemas/VrfSystem"
 
     SystemSummary:
       type: object

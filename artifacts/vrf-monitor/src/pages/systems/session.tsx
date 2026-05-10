@@ -26,8 +26,8 @@ export default function ReadingSessionDetail() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const { data: system } = useGetSystem(systemId, { query: { enabled: !!systemId } });
-  const { data: session, isLoading } = useGetReadingSession(systemId, sessionId, { query: { enabled: !!systemId && !!sessionId } });
+  const { data: system } = useGetSystem(systemId, { query: { enabled: !!systemId } as never });
+  const { data: session, isLoading } = useGetReadingSession(systemId, sessionId, { query: { enabled: !!systemId && !!sessionId } as never });
   const analyzeSession = useAnalyzeReadingSession();
 
   const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
