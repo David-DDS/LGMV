@@ -13,7 +13,19 @@ import NewSession from "@/pages/systems/new-session";
 import ReadingSession from "@/pages/systems/session";
 import NotFound from "@/pages/not-found";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 function Router() {
   return (

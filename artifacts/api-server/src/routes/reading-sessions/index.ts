@@ -206,14 +206,36 @@ router.post(
       return;
     }
 
-    // Get baseline readings from the most recent processed startup report
-    const [latestReport] = await db
+    // Get baseline readings from the most recent processed startup report.
+    // The comparison flow REQUIRES a baseline — without it there is nothing to compare against.
+    const reportsForSystem = await db
       .select()
       .from(startupReportsTable)
       .where(eq(startupReportsTable.systemId, system.id))
       .orderBy(desc(startupReportsTable.uploadedAt));
 
-    const baselineData = latestReport?.extractedData
+    if (reportsForSystem.length === 0) {
+      res.status(412).json({
+        error:
+          "Este sistema nao possui relatorio de partida cadastrado. Anexe um relatorio de partida (PDF) antes de analisar leituras LGMV para que a IA possa comparar com o baseline original.",
+      });
+      return;
+    }
+
+    const latestReport = reportsForSystem.find((r) => r.processingStatus === "done" && r.extractedData);
+    if (!latestReport) {
+      const stillProcessing = reportsForSystem.some(
+        (r) => r.processingStatus === "processing" || r.processingStatus === "pending"
+      );
+      res.status(412).json({
+        error: stillProcessing
+          ? "O relatorio de partida ainda esta sendo processado pela IA. Aguarde a conclusao para iniciar a analise."
+          : "O relatorio de partida nao pode ser processado e nao gerou baseline. Reprocesse o relatorio antes de analisar leituras LGMV.",
+      });
+      return;
+    }
+
+    const baselineData = latestReport.extractedData
       ? JSON.parse(latestReport.extractedData)
       : null;
 

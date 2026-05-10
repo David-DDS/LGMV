@@ -1,8 +1,10 @@
 import { useRoute, Link } from "wouter";
 import {
   useGetReadingSession, useGetSystem, useAnalyzeReadingSession,
+  useListStartupReports,
   getGetReadingSessionQueryKey,
 } from "@workspace/api-client-react";
+import { extractApiError, readErrorFromResponse } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { HealthBadge } from "@/components/health-badge";
@@ -28,7 +30,11 @@ export default function ReadingSessionDetail() {
 
   const { data: system } = useGetSystem(systemId, { query: { enabled: !!systemId } as never });
   const { data: session, isLoading } = useGetReadingSession(systemId, sessionId, { query: { enabled: !!systemId && !!sessionId } as never });
+  const { data: startupReports } = useListStartupReports(systemId, { query: { enabled: !!systemId } as never });
   const analyzeSession = useAnalyzeReadingSession();
+
+  const hasBaseline = (startupReports ?? []).some((r) => r.processingStatus === "done" && r.extractedData);
+  const baselineProcessing = (startupReports ?? []).some((r) => r.processingStatus === "processing" || r.processingStatus === "pending");
 
   const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -38,11 +44,14 @@ export default function ReadingSessionDetail() {
     formData.append("photo", file);
     try {
       const response = await fetch(`/api/systems/${systemId}/reading-sessions/${sessionId}/photos`, { method: "POST", body: formData });
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        const msg = await readErrorFromResponse(response, "Nao foi possivel enviar a foto.");
+        throw new Error(msg);
+      }
       toast({ title: "Foto enviada", description: "A foto LGMV foi adicionada a sessao." });
       queryClient.invalidateQueries({ queryKey: getGetReadingSessionQueryKey(systemId, sessionId) });
-    } catch {
-      toast({ title: "Erro no upload", description: "Nao foi possivel enviar a foto.", variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro no upload", description: extractApiError(err, "Nao foi possivel enviar a foto."), variant: "destructive" });
     } finally {
       setIsUploading(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
@@ -50,12 +59,26 @@ export default function ReadingSessionDetail() {
   };
 
   const handleAnalyze = () => {
+    if (!hasBaseline) {
+      toast({
+        title: "Relatorio de partida obrigatorio",
+        description: baselineProcessing
+          ? "O relatorio de partida ainda esta sendo processado pela IA. Aguarde a conclusao para iniciar a analise."
+          : "Anexe um relatorio de partida (PDF) ao sistema antes de analisar leituras LGMV. Sem baseline a IA nao pode comparar valores.",
+        variant: "destructive",
+      });
+      return;
+    }
     analyzeSession.mutate({ systemId, sessionId }, {
       onSuccess: () => {
         toast({ title: "Analise concluida", description: "A IA finalizou a analise das leituras LGMV." });
         queryClient.invalidateQueries({ queryKey: getGetReadingSessionQueryKey(systemId, sessionId) });
       },
-      onError: () => toast({ title: "Erro na analise", description: "Nao foi possivel analisar a sessao.", variant: "destructive" }),
+      onError: (err) => toast({
+        title: "Erro na analise",
+        description: extractApiError(err, "Nao foi possivel analisar a sessao."),
+        variant: "destructive",
+      }),
     });
   };
 
@@ -137,6 +160,23 @@ export default function ReadingSessionDetail() {
           )}
         </Button>
       </div>
+
+      {/* Baseline warning */}
+      {!hasBaseline && (
+        <Card className="border-amber-400/30 bg-amber-400/[0.04]">
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+            <div className="text-xs leading-relaxed">
+              <p className="font-bold text-amber-400 mb-0.5">Sem relatorio de partida cadastrado</p>
+              <p className="text-muted-foreground">
+                {baselineProcessing
+                  ? "O relatorio de partida ainda esta sendo processado pela IA. Aguarde a conclusao para iniciar a analise."
+                  : <>Anexe um relatorio de partida (PDF) ao sistema antes de analisar leituras LGMV — sem baseline a IA nao pode comparar valores. <Link href={`/systems/${systemId}`} className="underline hover:text-amber-400">Ir para o sistema</Link>.</>}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Photos + Analysis */}
       <div className="grid gap-4 md:grid-cols-3">

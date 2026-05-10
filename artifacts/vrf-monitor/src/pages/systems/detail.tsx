@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getModeColor } from "@/lib/status-colors";
+import { extractApiError, readErrorFromResponse } from "@/lib/api-error";
 import {
   Dialog, DialogContent, DialogDescription,
   DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
@@ -95,11 +96,14 @@ export default function SystemDetail() {
     formData.append("file", file);
     try {
       const response = await fetch(`/api/systems/${systemId}/startup-reports`, { method: "POST", body: formData });
-      if (!response.ok) throw new Error(await response.text());
+      if (!response.ok) {
+        const msg = await readErrorFromResponse(response, "Nao foi possivel enviar o relatorio.");
+        throw new Error(msg);
+      }
       toast({ title: "Relatorio enviado", description: "O relatorio de partida esta sendo processado pela IA." });
       queryClient.invalidateQueries({ queryKey: getListStartupReportsQueryKey(systemId) });
-    } catch {
-      toast({ title: "Erro no upload", description: "Nao foi possivel enviar o relatorio.", variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Erro no upload", description: extractApiError(err, "Nao foi possivel enviar o relatorio."), variant: "destructive" });
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -124,7 +128,7 @@ export default function SystemDetail() {
         toast({ title: "Relatorio removido" });
         queryClient.invalidateQueries({ queryKey: getListStartupReportsQueryKey(systemId) });
       },
-      onError: () => toast({ title: "Erro ao remover relatorio", variant: "destructive" }),
+      onError: (err) => toast({ title: "Erro ao remover relatorio", description: extractApiError(err, "Tente novamente."), variant: "destructive" }),
     });
   };
 
@@ -134,14 +138,14 @@ export default function SystemDetail() {
         toast({ title: "Reprocessando", description: "A IA esta analisando o relatorio novamente." });
         queryClient.invalidateQueries({ queryKey: getListStartupReportsQueryKey(systemId) });
       },
-      onError: () => toast({ title: "Erro ao reprocessar", description: "O arquivo original pode nao estar mais disponivel.", variant: "destructive" }),
+      onError: (err) => toast({ title: "Erro ao reprocessar", description: extractApiError(err, "O arquivo original pode nao estar mais disponivel."), variant: "destructive" }),
     });
   };
 
   const handleDelete = () => {
     deleteSystem.mutate({ systemId }, {
       onSuccess: () => { toast({ title: "Sistema removido" }); setLocation("/systems"); },
-      onError: () => toast({ title: "Erro ao remover", variant: "destructive" }),
+      onError: (err) => toast({ title: "Erro ao remover", description: extractApiError(err, "Tente novamente."), variant: "destructive" }),
     });
   };
 

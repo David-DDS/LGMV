@@ -1,5 +1,7 @@
 import { useRoute, Link, useLocation } from "wouter";
-import { useCreateReadingSession, getGetSystemQueryKey } from "@workspace/api-client-react";
+import { useCreateReadingSession, useListStartupReports, getGetSystemQueryKey } from "@workspace/api-client-react";
+import { extractApiError } from "@/lib/api-error";
+import { AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,9 @@ export default function NewSession() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const createSession = useCreateReadingSession();
+  const { data: startupReports } = useListStartupReports(systemId, { query: { enabled: !!systemId } as never });
+  const hasBaseline = (startupReports ?? []).some((r) => r.processingStatus === "done" && r.extractedData);
+  const baselineProcessing = (startupReports ?? []).some((r) => r.processingStatus === "processing" || r.processingStatus === "pending");
 
   const form = useForm<SessionFormValues>({
     resolver: zodResolver(sessionSchema),
@@ -66,8 +71,8 @@ export default function NewSession() {
           queryClient.invalidateQueries({ queryKey: getGetSystemQueryKey(systemId) });
           setLocation(`/systems/${systemId}/sessions/${session.id}`);
         },
-        onError: () => {
-          toast({ title: "Erro ao criar sessao", description: "Nao foi possivel criar a sessao.", variant: "destructive" });
+        onError: (err) => {
+          toast({ title: "Erro ao criar sessao", description: extractApiError(err, "Nao foi possivel criar a sessao."), variant: "destructive" });
         },
       }
     );
@@ -86,6 +91,22 @@ export default function NewSession() {
           <h1 className="text-2xl font-black tracking-tight">Nova Sessao de Leitura</h1>
         </div>
       </div>
+
+      {!hasBaseline && (
+        <Card className="border-amber-400/30 bg-amber-400/[0.04]">
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+            <div className="text-xs leading-relaxed">
+              <p className="font-bold text-amber-400 mb-0.5">Sem relatorio de partida cadastrado</p>
+              <p className="text-muted-foreground">
+                {baselineProcessing
+                  ? "O relatorio de partida ainda esta sendo processado pela IA. Aguarde a conclusao antes de iniciar a analise."
+                  : <>Voce pode criar a sessao, mas a analise por IA so ira funcionar apos anexar um relatorio de partida (PDF) na tela do sistema. Sem baseline a IA nao pode comparar valores. <Link href={`/systems/${systemId}`} className="underline hover:text-amber-400">Ir para o sistema</Link>.</>}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border/50 bg-card">
         <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40">
