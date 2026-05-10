@@ -96,18 +96,25 @@ export function SystemForm({
     if (!prefilledValues) return;
     const current = form.getValues();
     const dirtyFields = form.formState.dirtyFields;
+    const merged: Partial<SystemFormValues> = { ...current };
+    let changed = false;
     (Object.keys(prefilledValues) as (keyof SystemFormValues)[]).forEach((key) => {
       const value = prefilledValues[key];
       if (value == null || value === "") return;
       const isEmpty = !current[key];
       const wasEdited = !!dirtyFields[key];
       if (isEmpty && !wasEdited) {
-        form.setValue(key, value as SystemFormValues[typeof key], {
-          shouldDirty: false,
-          shouldValidate: false,
-        });
+        (merged as Record<string, unknown>)[key] = value;
+        changed = true;
       }
     });
+    if (changed) {
+      form.reset(merged as SystemFormValues, {
+        keepDirty: true,
+        keepDirtyValues: true,
+        keepTouched: true,
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefilledValues]);
 

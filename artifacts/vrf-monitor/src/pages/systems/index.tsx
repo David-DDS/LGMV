@@ -129,12 +129,6 @@ function BuildingGroup({ building, systems }: { building: string; systems: Syste
             {healthCounts.critical > 0 && <span className="text-[11px] text-red-400/70">{healthCounts.critical} critico</span>}
           </div>
         </div>
-        <Link href={`/systems/new`}>
-          <button className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground/40 hover:text-[#FF6200] transition-colors">
-            <Plus className="h-3.5 w-3.5" />
-            Adicionar sistema
-          </button>
-        </Link>
         <ChevronRight className="h-4 w-4 text-muted-foreground/20 shrink-0" />
       </div>
 
