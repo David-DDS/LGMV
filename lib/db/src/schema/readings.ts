@@ -42,6 +42,7 @@ export const lgmvReadingsTable = pgTable("lgmv_readings", {
   status: text("status").notNull().default("unknown"),
   baselineValue: real("baseline_value"),
   deviationPercent: real("deviation_percent"),
+  sourcePhotoId: integer("source_photo_id").references(() => readingPhotosTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

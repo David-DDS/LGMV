@@ -11,5 +11,7 @@ export interface ReadingPhoto {
   sessionId: number;
   filename: string;
   fileUrl: string;
+  /** @nullable */
+  label?: string | null;
   uploadedAt: string;
 }

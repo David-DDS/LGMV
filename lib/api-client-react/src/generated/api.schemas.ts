@@ -369,6 +369,8 @@ export interface ReadingPhoto {
   sessionId: number;
   filename: string;
   fileUrl: string;
+  /** @nullable */
+  label?: string | null;
   uploadedAt: string;
 }
 
@@ -398,6 +400,10 @@ export interface LgmvReading {
   baselineValue?: number | null;
   /** @nullable */
   deviationPercent?: number | null;
+  /** @nullable */
+  sourcePhotoId?: number | null;
+  /** @nullable */
+  sourcePhotoLabel?: string | null;
 }
 
 export interface ReadingSessionDetail {

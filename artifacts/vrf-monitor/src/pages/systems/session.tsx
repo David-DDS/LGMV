@@ -1,7 +1,7 @@
 import { useRoute, Link } from "wouter";
 import {
   useGetReadingSession, useGetSystem, useAnalyzeReadingSession,
-  useListStartupReports,
+  useListStartupReports, useDeleteReadingPhoto,
   getGetReadingSessionQueryKey,
 } from "@workspace/api-client-react";
 import { extractApiError, readErrorFromResponse } from "@/lib/api-error";
@@ -11,7 +11,7 @@ import { HealthBadge } from "@/components/health-badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, BrainCircuit, Activity, AlertTriangle, FileImage, Upload } from "lucide-react";
+import { ArrowLeft, BrainCircuit, Activity, AlertTriangle, FileImage, Upload, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useRef, useState } from "react";
@@ -32,6 +32,22 @@ export default function ReadingSessionDetail() {
   const { data: session, isLoading } = useGetReadingSession(systemId, sessionId, { query: { enabled: !!systemId && !!sessionId } as never });
   const { data: startupReports } = useListStartupReports(systemId, { query: { enabled: !!systemId } as never });
   const analyzeSession = useAnalyzeReadingSession();
+  const deletePhoto = useDeleteReadingPhoto();
+
+  const handleDeletePhoto = (photoId: number) => {
+    if (!window.confirm("Tem certeza que deseja remover esta foto? Esta acao nao pode ser desfeita.")) return;
+    deletePhoto.mutate({ systemId, sessionId, photoId }, {
+      onSuccess: () => {
+        toast({ title: "Foto removida", description: "A foto foi removida da sessao." });
+        queryClient.invalidateQueries({ queryKey: getGetReadingSessionQueryKey(systemId, sessionId) });
+      },
+      onError: (err) => toast({
+        title: "Erro ao remover",
+        description: extractApiError(err, "Nao foi possivel remover a foto."),
+        variant: "destructive",
+      }),
+    });
+  };
 
   const hasBaseline = (startupReports ?? []).some((r) => r.processingStatus === "done" && r.extractedData);
   const baselineProcessing = (startupReports ?? []).some((r) => r.processingStatus === "processing" || r.processingStatus === "pending");
@@ -213,17 +229,33 @@ export default function ReadingSessionDetail() {
               </div>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {session.photos.map((photo) => (
-                  <div key={photo.id} className="relative aspect-[4/3] rounded-xl overflow-hidden border border-border/40 bg-muted/20">
-                    {photo.fileUrl ? (
-                      <img src={photo.fileUrl} alt="LGMV" className="object-cover w-full h-full" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <FileImage className="h-6 w-6 text-muted-foreground/20" />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {session.photos.map((photo, idx) => {
+                  const label = photo.label ?? `Foto ${idx + 1}`;
+                  return (
+                    <div key={photo.id} className="group relative aspect-[4/3] rounded-xl overflow-hidden border border-border/40 bg-muted/20">
+                      {photo.fileUrl ? (
+                        <img src={photo.fileUrl} alt={label} className="object-cover w-full h-full" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <FileImage className="h-6 w-6 text-muted-foreground/20" />
+                        </div>
+                      )}
+                      <span className="absolute top-1.5 left-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-black/70 text-white border border-white/10">
+                        {label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePhoto(photo.id)}
+                        disabled={deletePhoto.isPending}
+                        className="absolute top-1.5 right-1.5 h-6 w-6 rounded-md bg-black/70 hover:bg-red-500/90 text-white border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-40"
+                        aria-label={`Remover ${label}`}
+                        title={`Remover ${label}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
                 <div
                   className="aspect-[4/3] rounded-xl border-2 border-dashed border-border/40 flex flex-col items-center justify-center text-muted-foreground/30 hover:text-muted-foreground/60 hover:border-border/60 transition-all cursor-pointer"
                   onClick={() => photoInputRef.current?.click()}
@@ -329,6 +361,9 @@ export default function ReadingSessionDetail() {
                 <TableHeader>
                   <TableRow className="border-border/40 bg-muted/20 hover:bg-muted/20">
                     <TableHead className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 py-3">Parametro</TableHead>
+                    {(session.photos?.length ?? 0) > 1 && (
+                      <TableHead className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 py-3 hidden sm:table-cell">Foto</TableHead>
+                    )}
                     <TableHead className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 py-3">Valor</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 py-3 hidden md:table-cell">Baseline</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 py-3 hidden lg:table-cell">Desvio</TableHead>
@@ -343,6 +378,17 @@ export default function ReadingSessionDetail() {
                       className={cn("border-border/30 transition-colors", getRowBg(reading.status), i > 0 ? "border-t" : "")}
                     >
                       <TableCell className="font-semibold text-sm py-3.5">{reading.parameter}</TableCell>
+                      {(session.photos?.length ?? 0) > 1 && (
+                        <TableCell className="py-3.5 hidden sm:table-cell">
+                          {reading.sourcePhotoLabel ? (
+                            <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md bg-muted/40 text-muted-foreground border border-border/40">
+                              {reading.sourcePhotoLabel}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/40">—</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="py-3.5">
                         {reading.value !== null && reading.value !== undefined ? (
                           <span className="font-black text-sm">

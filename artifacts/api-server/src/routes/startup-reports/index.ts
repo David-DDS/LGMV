@@ -2,8 +2,10 @@ import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import multer from "multer";
 import { execFile } from "child_process";
+import { randomUUID } from "crypto";
 import { db, vrfSystemsTable, startupReportsTable } from "@workspace/db";
 import {
   ListStartupReportsParams,
@@ -16,15 +18,18 @@ import {
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "../../lib/logger";
+import { uploadBlob, downloadBlobBuffer, deleteBlob, isObjectStorageUrl } from "../../lib/blobStorage";
 
 const router: IRouter = Router();
 
+// Local uploads dir is used ONLY for the short-lived "extract → preview → attach" staging flow.
+// Final persisted reports live in object storage so they survive deploys.
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
+const stagingStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => {
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -32,7 +37,15 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+const uploadStaging = multer({ storage: stagingStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+// Write a buffer to a temp file (so pdftotext can read it).
+async function writeTempPdf(buffer: Buffer): Promise<string> {
+  const tmp = path.join(os.tmpdir(), `vrf-${randomUUID()}.pdf`);
+  await fs.promises.writeFile(tmp, buffer);
+  return tmp;
+}
 
 router.get("/systems/:systemId/startup-reports", async (req, res): Promise<void> => {
   const params = ListStartupReportsParams.safeParse(req.params);
@@ -57,7 +70,7 @@ router.get("/systems/:systemId/startup-reports", async (req, res): Promise<void>
 
 router.post(
   "/systems/:systemId/startup-reports",
-  upload.single("file"),
+  uploadMemory.single("file"),
   async (req, res): Promise<void> => {
     const params = UploadStartupReportParams.safeParse(req.params);
     if (!params.success) {
@@ -66,7 +79,7 @@ router.post(
     }
 
     if (!req.file) {
-      res.status(400).json({ error: "No file uploaded" });
+      res.status(400).json({ error: "Nenhum arquivo enviado." });
       return;
     }
 
@@ -76,24 +89,36 @@ router.post(
       .where(eq(vrfSystemsTable.id, params.data.systemId));
 
     if (!system) {
-      res.status(404).json({ error: "System not found" });
+      res.status(404).json({ error: "Sistema nao encontrado." });
       return;
     }
 
-    const fileUrl = `/api/uploads/${req.file.filename}`;
+    let upload;
+    try {
+      upload = await uploadBlob({
+        buffer: req.file.buffer,
+        contentType: req.file.mimetype || "application/pdf",
+        folder: "startup-reports",
+      });
+    } catch (err) {
+      req.log?.error({ err }, "Failed to upload startup report to object storage");
+      res
+        .status(500)
+        .json({ error: "Falha ao salvar o relatorio no armazenamento. Tente novamente." });
+      return;
+    }
 
     const [report] = await db
       .insert(startupReportsTable)
       .values({
         systemId: params.data.systemId,
         filename: req.file.originalname,
-        fileUrl,
+        fileUrl: upload.fileUrl,
         processingStatus: "processing",
       })
       .returning();
 
-    // Process PDF with AI in background
-    processStartupReportAsync(report.id, system.id, req.file.path, system.vrfType).catch((err) =>
+    processStartupReportAsync(report.id, system.id, req.file.buffer, system.vrfType).catch((err) =>
       logger.error({ err, reportId: report.id }, "Failed to process startup report")
     );
 
@@ -105,13 +130,13 @@ router.post(
 );
 
 // Extract PDF data WITHOUT persisting a system or report.
-// Stages the file in uploads/ and returns prefill data for the new-system form.
+// Stages the file on disk for short-lived preview, returns prefill data for the new-system form.
 router.post(
   "/systems/extract-startup-pdf",
-  upload.single("file"),
+  uploadStaging.single("file"),
   async (req, res): Promise<void> => {
     if (!req.file) {
-      res.status(400).json({ error: "No file uploaded" });
+      res.status(400).json({ error: "Nenhum arquivo enviado." });
       return;
     }
 
@@ -125,16 +150,16 @@ router.post(
       });
     } catch (err) {
       logger.error({ err }, "Failed to extract startup PDF");
-      // Clean up failed file
       fs.promises.unlink(req.file.path).catch(() => undefined);
       res.status(500).json({
-        error: err instanceof Error ? err.message : "Extraction failed",
+        error: err instanceof Error ? err.message : "Falha na extracao.",
       });
     }
   }
 );
 
 // Attach a previously-extracted PDF (staged via extract-startup-pdf) to a system.
+// Moves the staged file from disk to object storage so it persists.
 router.post(
   "/systems/:systemId/startup-reports/from-extraction",
   async (req, res): Promise<void> => {
@@ -155,11 +180,11 @@ router.post(
       .from(vrfSystemsTable)
       .where(eq(vrfSystemsTable.id, params.data.systemId));
     if (!system) {
-      res.status(404).json({ error: "System not found" });
+      res.status(404).json({ error: "Sistema nao encontrado." });
       return;
     }
 
-    // Strict fileToken validation — reject path separators, "." and ".."
+    // Strict fileToken validation
     const token = body.data.fileToken;
     if (
       !token ||
@@ -170,38 +195,49 @@ router.post(
       token.includes("\0") ||
       token !== path.basename(token)
     ) {
-      res.status(400).json({ error: "Invalid fileToken" });
+      res.status(400).json({ error: "fileToken invalido." });
       return;
     }
     const filePath = path.join(uploadsDir, token);
-    // Ensure resolved path is still inside uploadsDir
     const resolvedUploads = fs.realpathSync(uploadsDir);
     let resolvedFile: string;
     try {
       resolvedFile = fs.realpathSync(filePath);
     } catch {
-      res.status(410).json({ error: "Staged file not found" });
+      res.status(410).json({ error: "Arquivo extraido nao esta mais disponivel." });
       return;
     }
-    if (
-      !resolvedFile.startsWith(resolvedUploads + path.sep) ||
-      !fs.statSync(resolvedFile).isFile()
-    ) {
-      res.status(400).json({ error: "Invalid fileToken" });
+    if (!resolvedFile.startsWith(resolvedUploads + path.sep) || !fs.statSync(resolvedFile).isFile()) {
+      res.status(400).json({ error: "fileToken invalido." });
       return;
     }
-    const safeName = token;
+
+    // Move from disk to object storage so it survives.
+    const buffer = await fs.promises.readFile(resolvedFile);
+    let upload;
+    try {
+      upload = await uploadBlob({
+        buffer,
+        contentType: "application/pdf",
+        folder: "startup-reports",
+      });
+    } catch (err) {
+      req.log?.error({ err }, "Failed to upload extracted PDF to object storage");
+      res
+        .status(500)
+        .json({ error: "Falha ao salvar o relatorio no armazenamento. Tente novamente." });
+      return;
+    }
+    fs.promises.unlink(resolvedFile).catch(() => undefined);
 
     const [report] = await db
       .insert(startupReportsTable)
       .values({
         systemId: params.data.systemId,
         filename: body.data.originalFilename,
-        fileUrl: `/api/uploads/${safeName}`,
+        fileUrl: upload.fileUrl,
         processingStatus: "done",
-        extractedData: body.data.baselineData
-          ? JSON.stringify(body.data.baselineData)
-          : null,
+        extractedData: body.data.baselineData ? JSON.stringify(body.data.baselineData) : null,
       })
       .returning();
 
@@ -225,7 +261,7 @@ router.get("/systems/:systemId/startup-reports/:reportId", async (req, res): Pro
     .where(eq(startupReportsTable.id, params.data.reportId));
 
   if (!report) {
-    res.status(404).json({ error: "Report not found" });
+    res.status(404).json({ error: "Relatorio nao encontrado." });
     return;
   }
 
@@ -252,17 +288,22 @@ router.delete("/systems/:systemId/startup-reports/:reportId", async (req, res): 
       )
     );
 
-  // Idempotent: 204 either way
   if (!report) {
     res.sendStatus(204);
     return;
   }
 
-  // Best-effort filesystem cleanup
   if (report.fileUrl) {
-    const filename = path.basename(report.fileUrl);
-    const filePath = path.join(uploadsDir, filename);
-    fs.promises.unlink(filePath).catch(() => undefined);
+    if (isObjectStorageUrl(report.fileUrl)) {
+      try {
+        await deleteBlob(report.fileUrl);
+      } catch (err) {
+        req.log?.warn({ err, reportId: report.id }, "Failed to delete report blob");
+      }
+    } else {
+      const filename = path.basename(report.fileUrl);
+      fs.promises.unlink(path.join(uploadsDir, filename)).catch(() => undefined);
+    }
   }
 
   await db
@@ -296,7 +337,7 @@ router.post(
       );
 
     if (!report) {
-      res.status(404).json({ error: "Report not found" });
+      res.status(404).json({ error: "Relatorio nao encontrado." });
       return;
     }
 
@@ -306,15 +347,23 @@ router.post(
       .where(eq(vrfSystemsTable.id, report.systemId));
 
     if (!system) {
-      res.status(404).json({ error: "System not found" });
+      res.status(404).json({ error: "Sistema nao encontrado." });
       return;
     }
 
-    const filename = path.basename(report.fileUrl ?? "");
-    const filePath = path.join(uploadsDir, filename);
+    let buffer: Buffer | null = null;
+    if (isObjectStorageUrl(report.fileUrl)) {
+      buffer = await downloadBlobBuffer(report.fileUrl);
+    } else {
+      const filename = path.basename(report.fileUrl ?? "");
+      const filePath = path.join(uploadsDir, filename);
+      if (filename && fs.existsSync(filePath)) {
+        buffer = await fs.promises.readFile(filePath);
+      }
+    }
 
-    if (!filename || !fs.existsSync(filePath)) {
-      res.status(410).json({ error: "Original file is no longer available" });
+    if (!buffer) {
+      res.status(410).json({ error: "Arquivo original nao esta mais disponivel." });
       return;
     }
 
@@ -329,7 +378,7 @@ router.post(
       )
       .returning();
 
-    processStartupReportAsync(updated.id, system.id, filePath, system.vrfType).catch((err) =>
+    processStartupReportAsync(updated.id, system.id, buffer, system.vrfType).catch((err) =>
       logger.error({ err, reportId: updated.id }, "Failed to reprocess startup report")
     );
 
@@ -491,11 +540,13 @@ Retorne UM UNICO JSON com esta estrutura exata:
 async function processStartupReportAsync(
   reportId: number,
   systemId: number,
-  filePath: string,
+  buffer: Buffer,
   vrfType: string
 ) {
+  let tempPath: string | null = null;
   try {
-    const { formData, baselineData } = await extractFromPdf(filePath);
+    tempPath = await writeTempPdf(buffer);
+    const { formData, baselineData } = await extractFromPdf(tempPath);
     const dataToStore = baselineData ?? { vrfType };
     await db
       .update(startupReportsTable)
@@ -505,8 +556,6 @@ async function processStartupReportAsync(
       })
       .where(eq(startupReportsTable.id, reportId));
 
-    // Sync system row with extracted PDF data (PDF is the source of truth).
-    // Only overwrite with non-empty extracted values; never wipe existing fields.
     const systemUpdate: Record<string, unknown> = {};
     if (formData.code) systemUpdate.code = formData.code;
     if (formData.name) systemUpdate.name = formData.name;
@@ -522,10 +571,7 @@ async function processStartupReportAsync(
 
     if (Object.keys(systemUpdate).length > 0) {
       systemUpdate.updatedAt = new Date();
-      await db
-        .update(vrfSystemsTable)
-        .set(systemUpdate)
-        .where(eq(vrfSystemsTable.id, systemId));
+      await db.update(vrfSystemsTable).set(systemUpdate).where(eq(vrfSystemsTable.id, systemId));
     }
   } catch (err) {
     logger.error({ err, reportId }, "Error processing startup report");
@@ -536,6 +582,10 @@ async function processStartupReportAsync(
         errorMessage: err instanceof Error ? err.message : "Unknown error",
       })
       .where(eq(startupReportsTable.id, reportId));
+  } finally {
+    if (tempPath) {
+      fs.promises.unlink(tempPath).catch(() => undefined);
+    }
   }
 }
 

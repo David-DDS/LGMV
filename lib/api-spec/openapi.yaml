@@ -414,6 +414,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReadingPhoto"
 
+  /systems/{systemId}/reading-sessions/{sessionId}/photos/{photoId}:
+    delete:
+      operationId: deleteReadingPhoto
+      tags: [reading-sessions]
+      summary: Delete a previously uploaded photo from a reading session
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /systems/{systemId}/reading-sessions/{sessionId}/analyze:
     post:
       operationId: analyzeReadingSession
@@ -789,6 +814,8 @@ components:
           type: string
         fileUrl:
           type: string
+        label:
+          type: ["string", "null"]
         uploadedAt:
           type: string
 
@@ -825,6 +852,10 @@ components:
           type: ["number", "null"]
         deviationPercent:
           type: ["number", "null"]
+        sourcePhotoId:
+          type: ["integer", "null"]
+        sourcePhotoLabel:
+          type: ["string", "null"]
 
     AnalysisResult:
       type: object

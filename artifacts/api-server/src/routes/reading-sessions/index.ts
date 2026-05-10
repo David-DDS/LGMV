@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
@@ -18,27 +18,29 @@ import {
   GetReadingSessionParams,
   UploadReadingPhotoParams,
   AnalyzeReadingSessionParams,
+  DeleteReadingPhotoParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "../../lib/logger";
 import { getLgParamRanges } from "../../lib/lg-param-ranges";
+import { uploadBlob, downloadBlobBuffer, deleteBlob, isObjectStorageUrl } from "../../lib/blobStorage";
 
 const router: IRouter = Router();
 
 const uploadsDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
 
-const photoStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${unique}-${file.originalname}`);
-  },
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
 
-const photoUpload = multer({ storage: photoStorage, limits: { fileSize: 20 * 1024 * 1024 } });
+function photoLabel(index: number): string {
+  return `Foto ${index + 1}`;
+}
+
+function annotateReadingPhoto<T extends { id: number; filename: string }>(p: T, index: number) {
+  return { ...p, label: photoLabel(index), filename: p.filename };
+}
 
 router.get("/systems/:systemId/reading-sessions", async (req, res): Promise<void> => {
   const params = ListReadingSessionsParams.safeParse(req.params);
@@ -113,16 +115,27 @@ router.get("/systems/:systemId/reading-sessions/:sessionId", async (req, res): P
     .select()
     .from(readingPhotosTable)
     .where(eq(readingPhotosTable.sessionId, params.data.sessionId))
-    .orderBy(readingPhotosTable.uploadedAt);
+    .orderBy(readingPhotosTable.uploadedAt, readingPhotosTable.id);
 
-  const readings = await db
+  const labelById = new Map<number, string>();
+  const annotatedPhotos = photos.map((p, i) => {
+    labelById.set(p.id, photoLabel(i));
+    return annotateReadingPhoto(p, i);
+  });
+
+  const readingsRows = await db
     .select()
     .from(lgmvReadingsTable)
     .where(eq(lgmvReadingsTable.sessionId, params.data.sessionId));
 
+  const readings = readingsRows.map((r) => ({
+    ...r,
+    sourcePhotoLabel: r.sourcePhotoId ? labelById.get(r.sourcePhotoId) ?? null : null,
+  }));
+
   res.json({
     ...session,
-    photos,
+    photos: annotatedPhotos,
     readings,
   });
 });
@@ -152,18 +165,77 @@ router.post(
       return;
     }
 
-    const fileUrl = `/api/uploads/${req.file.filename}`;
+    let upload;
+    try {
+      upload = await uploadBlob({
+        buffer: req.file.buffer,
+        contentType: req.file.mimetype || "image/jpeg",
+        folder: "lgmv-photos",
+      });
+    } catch (err) {
+      req.log?.error({ err }, "Failed to upload photo to object storage");
+      res.status(500).json({ error: "Falha ao salvar a foto no armazenamento. Tente novamente." });
+      return;
+    }
 
     const [photo] = await db
       .insert(readingPhotosTable)
       .values({
         sessionId: params.data.sessionId,
         filename: req.file.originalname,
-        fileUrl,
+        fileUrl: upload.fileUrl,
       })
       .returning();
 
-    res.status(201).json(photo);
+    // Compute label index
+    const all = await db
+      .select()
+      .from(readingPhotosTable)
+      .where(eq(readingPhotosTable.sessionId, params.data.sessionId))
+      .orderBy(readingPhotosTable.uploadedAt, readingPhotosTable.id);
+    const idx = all.findIndex((p) => p.id === photo.id);
+
+    res.status(201).json(annotateReadingPhoto(photo, idx >= 0 ? idx : all.length - 1));
+  }
+);
+
+router.delete(
+  "/systems/:systemId/reading-sessions/:sessionId/photos/:photoId",
+  async (req, res): Promise<void> => {
+    const params = DeleteReadingPhotoParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const [photo] = await db
+      .select()
+      .from(readingPhotosTable)
+      .where(
+        and(
+          eq(readingPhotosTable.id, params.data.photoId),
+          eq(readingPhotosTable.sessionId, params.data.sessionId)
+        )
+      );
+
+    if (!photo) {
+      res.sendStatus(204);
+      return;
+    }
+
+    if (isObjectStorageUrl(photo.fileUrl)) {
+      try {
+        await deleteBlob(photo.fileUrl);
+      } catch (err) {
+        req.log?.warn({ err, photoId: photo.id }, "Failed to delete photo blob");
+      }
+    } else if (photo.fileUrl) {
+      const filename = path.basename(photo.fileUrl);
+      fs.promises.unlink(path.join(uploadsDir, filename)).catch(() => undefined);
+    }
+
+    await db.delete(readingPhotosTable).where(eq(readingPhotosTable.id, photo.id));
+    res.sendStatus(204);
   }
 );
 
@@ -199,15 +271,15 @@ router.post(
     const photos = await db
       .select()
       .from(readingPhotosTable)
-      .where(eq(readingPhotosTable.sessionId, params.data.sessionId));
+      .where(eq(readingPhotosTable.sessionId, params.data.sessionId))
+      .orderBy(readingPhotosTable.uploadedAt, readingPhotosTable.id);
 
     if (photos.length === 0) {
-      res.status(400).json({ error: "No photos uploaded for this session" });
+      res.status(400).json({ error: "Nenhuma foto enviada para esta sessao." });
       return;
     }
 
     // Get baseline readings from the most recent processed startup report.
-    // The comparison flow REQUIRES a baseline — without it there is nothing to compare against.
     const reportsForSystem = await db
       .select()
       .from(startupReportsTable)
@@ -235,76 +307,106 @@ router.post(
       return;
     }
 
-    const baselineData = latestReport.extractedData
-      ? JSON.parse(latestReport.extractedData)
-      : null;
-
+    const baselineData = latestReport.extractedData ? JSON.parse(latestReport.extractedData) : null;
     const paramRanges = getLgParamRanges(system.vrfType, session.mode as "cooling" | "heating");
 
-    // Build photo content for AI
-    const photoContents: { type: "image_url"; image_url: { url: string } }[] = [];
+    // Build photo content for AI — labelled per photo
+    const photoContents: Array<
+      { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
+    > = [];
 
-    for (const photo of photos) {
-      const filePath = path.join(uploadsDir, path.basename(photo.fileUrl));
-      if (fs.existsSync(filePath)) {
-        const buffer = fs.readFileSync(filePath);
-        const base64 = buffer.toString("base64");
-        const ext = path.extname(photo.filename).toLowerCase();
-        const mimeType =
-          ext === ".png"
-            ? "image/png"
-            : ext === ".jpg" || ext === ".jpeg"
-              ? "image/jpeg"
-              : "image/jpeg";
-        photoContents.push({
-          type: "image_url",
-          image_url: { url: `data:${mimeType};base64,${base64}` },
-        });
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      let buffer: Buffer | null = null;
+      try {
+        if (isObjectStorageUrl(photo.fileUrl)) {
+          buffer = await downloadBlobBuffer(photo.fileUrl);
+        } else {
+          const filePath = path.join(uploadsDir, path.basename(photo.fileUrl));
+          if (fs.existsSync(filePath)) buffer = fs.readFileSync(filePath);
+        }
+      } catch (err) {
+        req.log?.warn({ err, photoId: photo.id }, "Failed to load photo for analysis");
       }
+      if (!buffer) continue;
+
+      const ext = path.extname(photo.filename).toLowerCase();
+      const mimeType =
+        ext === ".png" ? "image/png" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/jpeg";
+      const base64 = buffer.toString("base64");
+      photoContents.push({
+        type: "text",
+        text: `\n--- ${photoLabel(i)} (${photo.filename}) ---`,
+      });
+      photoContents.push({
+        type: "image_url",
+        image_url: { url: `data:${mimeType};base64,${base64}` },
+      });
+    }
+
+    if (photoContents.length === 0) {
+      res
+        .status(500)
+        .json({ error: "Nenhuma das fotos pode ser carregada do armazenamento." });
+      return;
     }
 
     const baselineText = baselineData?.baselineReadings
-      ? `\nLeituras de baseline do startup:\n${JSON.stringify(baselineData.baselineReadings[session.mode] ?? {}, null, 2)}`
-      : "\nSem dados de baseline disponíveis.";
+      ? `\nLeituras de baseline do startup:\n${JSON.stringify(
+          baselineData.baselineReadings[session.mode] ?? {},
+          null,
+          2
+        )}`
+      : "\nSem dados de baseline disponiveis.";
 
-    const rangesText = `\nRanges normais LG (${system.vrfType}, modo ${session.mode}):\n${JSON.stringify(paramRanges, null, 2)}`;
+    const rangesText = `\nRanges normais LG (${system.vrfType}, modo ${session.mode}):\n${JSON.stringify(
+      paramRanges,
+      null,
+      2
+    )}`;
 
-    const systemPrompt = `Você é um especialista em sistemas de ar condicionado VRF LG com amplo conhecimento em manutenção preditiva.
+    const photosListText = photos.map((p, i) => `- ${photoLabel(i)} (${p.filename})`).join("\n");
+
+    const systemPrompt = `Voce e um especialista em sistemas de ar condicionado VRF LG com amplo conhecimento em manutencao preditiva.
 
 Sistema: ${system.name} (${system.code})
 Modelo: ${system.model ?? "N/A"}
 Tipo VRF: ${system.vrfType}
-Modo de operação: ${session.mode === "cooling" ? "Refrigeração (Cooling)" : "Aquecimento (Heating)"}
+Modo de operacao: ${session.mode === "cooling" ? "Refrigeracao (Cooling)" : "Aquecimento (Heating)"}
 Data da leitura: ${session.sessionDate}
 ${baselineText}
 ${rangesText}
 
-Analise as fotos das leituras LGMV e:
-1. Extraia todos os valores de parâmetros visíveis
-2. Compare com os ranges normais do fabricante LG
-3. Compare com os valores de baseline do startup (se disponível)
-4. Identifique parâmetros fora do range normal
-5. Gere insights sobre a saúde do sistema
-6. Forneça recomendações de manutenção se necessário
+Voce recebera ${photos.length} foto(s) do LGMV, cada uma rotulada como "Foto N" no texto que precede a imagem:
+${photosListText}
 
-Retorne APENAS um JSON válido com esta estrutura:
+Analise as fotos das leituras LGMV e:
+1. Extraia todos os valores de parametros visiveis. Para CADA leitura indique de qual foto ela veio em "sourcePhotoIndex" (numero inteiro 1-${photos.length}, correspondendo a "Foto 1", "Foto 2", etc).
+2. Compare com os ranges normais do fabricante LG.
+3. Compare com os valores de baseline do startup (se disponivel).
+4. Identifique parametros fora do range normal.
+5. Gere insights sobre a saude do sistema.
+6. Forneca recomendacoes de manutencao se necessario.
+
+Retorne APENAS um JSON valido com esta estrutura:
 {
   "healthStatus": "healthy|warning|critical",
-  "summary": "Resumo em português da saúde do sistema",
+  "summary": "Resumo em portugues da saude do sistema",
   "readings": [
     {
-      "parameter": "Nome do parâmetro",
+      "parameter": "Nome do parametro",
       "unit": "unidade",
       "value": valor_numerico_ou_null,
       "minNormal": valor_minimo_normal_ou_null,
       "maxNormal": valor_maximo_normal_ou_null,
       "status": "normal|warning|critical|unknown",
       "baselineValue": valor_baseline_ou_null,
-      "deviationPercent": percentual_desvio_do_baseline_ou_null
+      "deviationPercent": percentual_desvio_do_baseline_ou_null,
+      "sourcePhotoIndex": numero_da_foto_1_a_${photos.length}
     }
   ],
-  "insights": ["insight 1", "insight 2", ...],
-  "recommendations": ["recomendação 1", "recomendação 2", ...],
+  "insights": ["insight 1", "insight 2"],
+  "recommendations": ["recomendacao 1", "recomendacao 2"],
   "maintenanceRequired": true|false
 }`;
 
@@ -314,10 +416,7 @@ Retorne APENAS um JSON válido com esta estrutura:
       messages: [
         {
           role: "user",
-          content: [
-            { type: "text", text: systemPrompt },
-            ...photoContents,
-          ],
+          content: [{ type: "text", text: systemPrompt }, ...photoContents],
         },
       ],
     });
@@ -335,6 +434,7 @@ Retorne APENAS um JSON válido com esta estrutura:
         status: string;
         baselineValue: number | null;
         deviationPercent: number | null;
+        sourcePhotoIndex?: number | null;
       }[];
       insights: string[];
       recommendations: string[];
@@ -346,27 +446,34 @@ Retorne APENAS um JSON válido com esta estrutura:
       analysisData = match ? JSON.parse(match[0]) : JSON.parse(content);
     } catch {
       logger.error({ content }, "Failed to parse AI analysis response");
-      res.status(500).json({ error: "Failed to parse AI analysis" });
+      res.status(500).json({ error: "Falha ao interpretar resposta da IA." });
       return;
     }
 
     // Delete old readings for this session
     await db.delete(lgmvReadingsTable).where(eq(lgmvReadingsTable.sessionId, params.data.sessionId));
 
-    // Insert new readings
+    // Insert new readings, mapping sourcePhotoIndex (1-based) to photo id
     if (analysisData.readings && analysisData.readings.length > 0) {
       await db.insert(lgmvReadingsTable).values(
-        analysisData.readings.map((r) => ({
-          sessionId: params.data.sessionId,
-          parameter: r.parameter,
-          unit: r.unit,
-          value: r.value,
-          minNormal: r.minNormal,
-          maxNormal: r.maxNormal,
-          status: r.status,
-          baselineValue: r.baselineValue,
-          deviationPercent: r.deviationPercent,
-        }))
+        analysisData.readings.map((r) => {
+          const idx =
+            typeof r.sourcePhotoIndex === "number" && r.sourcePhotoIndex >= 1 && r.sourcePhotoIndex <= photos.length
+              ? r.sourcePhotoIndex - 1
+              : null;
+          return {
+            sessionId: params.data.sessionId,
+            parameter: r.parameter,
+            unit: r.unit,
+            value: r.value,
+            minNormal: r.minNormal,
+            maxNormal: r.maxNormal,
+            status: r.status,
+            baselineValue: r.baselineValue,
+            deviationPercent: r.deviationPercent,
+            sourcePhotoId: idx !== null ? photos[idx].id : null,
+          };
+        })
       );
     }
 
@@ -393,10 +500,15 @@ Retorne APENAS um JSON válido com esta estrutura:
       })
       .where(eq(vrfSystemsTable.id, system.id));
 
-    const readings = await db
-      .select()
-      .from(lgmvReadingsTable)
-      .where(eq(lgmvReadingsTable.sessionId, params.data.sessionId));
+    const labelById = new Map<number, string>();
+    photos.forEach((p, i) => labelById.set(p.id, photoLabel(i)));
+
+    const readings = (
+      await db.select().from(lgmvReadingsTable).where(eq(lgmvReadingsTable.sessionId, params.data.sessionId))
+    ).map((r) => ({
+      ...r,
+      sourcePhotoLabel: r.sourcePhotoId ? labelById.get(r.sourcePhotoId) ?? null : null,
+    }));
 
     res.json({
       sessionId: params.data.sessionId,

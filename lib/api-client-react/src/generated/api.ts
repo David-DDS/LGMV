@@ -1717,6 +1717,99 @@ export const useUploadReadingPhoto = <
 };
 
 /**
+ * @summary Delete a previously uploaded photo from a reading session
+ */
+export const getDeleteReadingPhotoUrl = (
+  systemId: number,
+  sessionId: number,
+  photoId: number,
+) => {
+  return `/api/systems/${systemId}/reading-sessions/${sessionId}/photos/${photoId}`;
+};
+
+export const deleteReadingPhoto = async (
+  systemId: number,
+  sessionId: number,
+  photoId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(
+    getDeleteReadingPhotoUrl(systemId, sessionId, photoId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteReadingPhotoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteReadingPhoto>>,
+    TError,
+    { systemId: number; sessionId: number; photoId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteReadingPhoto>>,
+  TError,
+  { systemId: number; sessionId: number; photoId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteReadingPhoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteReadingPhoto>>,
+    { systemId: number; sessionId: number; photoId: number }
+  > = (props) => {
+    const { systemId, sessionId, photoId } = props ?? {};
+
+    return deleteReadingPhoto(systemId, sessionId, photoId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteReadingPhotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteReadingPhoto>>
+>;
+
+export type DeleteReadingPhotoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a previously uploaded photo from a reading session
+ */
+export const useDeleteReadingPhoto = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteReadingPhoto>>,
+    TError,
+    { systemId: number; sessionId: number; photoId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteReadingPhoto>>,
+  TError,
+  { systemId: number; sessionId: number; photoId: number },
+  TContext
+> => {
+  return useMutation(getDeleteReadingPhotoMutationOptions(options));
+};
+
+/**
  * @summary Run AI analysis on uploaded photos to extract and evaluate readings
  */
 export const getAnalyzeReadingSessionUrl = (

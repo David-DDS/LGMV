@@ -479,6 +479,7 @@ export const GetReadingSessionResponse = zod.object({
       sessionId: zod.number(),
       filename: zod.string(),
       fileUrl: zod.string(),
+      label: zod.string().nullish(),
       uploadedAt: zod.string(),
     }),
   ),
@@ -494,6 +495,8 @@ export const GetReadingSessionResponse = zod.object({
       status: zod.enum(["normal", "warning", "critical", "unknown"]),
       baselineValue: zod.number().nullish(),
       deviationPercent: zod.number().nullish(),
+      sourcePhotoId: zod.number().nullish(),
+      sourcePhotoLabel: zod.string().nullish(),
     }),
   ),
 });
@@ -508,6 +511,15 @@ export const UploadReadingPhotoParams = zod.object({
 
 export const UploadReadingPhotoBody = zod.object({
   photo: zod.instanceof(File),
+});
+
+/**
+ * @summary Delete a previously uploaded photo from a reading session
+ */
+export const DeleteReadingPhotoParams = zod.object({
+  systemId: zod.coerce.number(),
+  sessionId: zod.coerce.number(),
+  photoId: zod.coerce.number(),
 });
 
 /**
@@ -534,6 +546,8 @@ export const AnalyzeReadingSessionResponse = zod.object({
       status: zod.enum(["normal", "warning", "critical", "unknown"]),
       baselineValue: zod.number().nullish(),
       deviationPercent: zod.number().nullish(),
+      sourcePhotoId: zod.number().nullish(),
+      sourcePhotoLabel: zod.string().nullish(),
     }),
   ),
   insights: zod.array(zod.string()),

@@ -23,4 +23,8 @@ export interface LgmvReading {
   baselineValue?: number | null;
   /** @nullable */
   deviationPercent?: number | null;
+  /** @nullable */
+  sourcePhotoId?: number | null;
+  /** @nullable */
+  sourcePhotoLabel?: string | null;
 }
