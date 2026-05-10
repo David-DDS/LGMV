@@ -3,13 +3,22 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: VRF Monitor LG - API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: systems
+    description: VRF Systems management
+  - name: startup-reports
+    description: Startup report upload and management
+  - name: reading-sessions
+    description: Monthly LGMV reading sessions
+  - name: dashboard
+    description: Dashboard and summary views
+
 paths:
   /healthz:
     get:
@@ -24,6 +33,322 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /systems:
+    get:
+      operationId: listSystems
+      tags: [systems]
+      summary: List all VRF systems
+      responses:
+        "200":
+          description: List of systems
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VrfSystem"
+    post:
+      operationId: createSystem
+      tags: [systems]
+      summary: Create a new VRF system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VrfSystemInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VrfSystem"
+
+  /systems/dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard overview stats
+      responses:
+        "200":
+          description: Dashboard overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+
+  /systems/{systemId}:
+    get:
+      operationId: getSystem
+      tags: [systems]
+      summary: Get a VRF system
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: System found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VrfSystem"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSystem
+      tags: [systems]
+      summary: Update a VRF system
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VrfSystemUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VrfSystem"
+    delete:
+      operationId: deleteSystem
+      tags: [systems]
+      summary: Delete a VRF system
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /systems/{systemId}/summary:
+    get:
+      operationId: getSystemSummary
+      tags: [systems]
+      summary: Get system health summary and trend
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: System health summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemSummary"
+
+  /systems/{systemId}/startup-reports:
+    get:
+      operationId: listStartupReports
+      tags: [startup-reports]
+      summary: List startup reports for a system
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of startup reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StartupReport"
+    post:
+      operationId: uploadStartupReport
+      tags: [startup-reports]
+      summary: Upload and process a startup report PDF
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/StartupReportUpload"
+      responses:
+        "201":
+          description: Uploaded and processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartupReport"
+
+  /systems/{systemId}/startup-reports/{reportId}:
+    get:
+      operationId: getStartupReport
+      tags: [startup-reports]
+      summary: Get a startup report
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: reportId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Startup report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartupReport"
+        "404":
+          description: Not found
+
+  /systems/{systemId}/reading-sessions:
+    get:
+      operationId: listReadingSessions
+      tags: [reading-sessions]
+      summary: List reading sessions for a system
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of reading sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReadingSession"
+    post:
+      operationId: createReadingSession
+      tags: [reading-sessions]
+      summary: Create a new reading session
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadingSessionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingSession"
+
+  /systems/{systemId}/reading-sessions/{sessionId}:
+    get:
+      operationId: getReadingSession
+      tags: [reading-sessions]
+      summary: Get a reading session with readings and analysis
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reading session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingSessionDetail"
+        "404":
+          description: Not found
+
+  /systems/{systemId}/reading-sessions/{sessionId}/photos:
+    post:
+      operationId: uploadReadingPhoto
+      tags: [reading-sessions]
+      summary: Upload a photo of LGMV readings for AI extraction
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/PhotoUpload"
+      responses:
+        "201":
+          description: Photo uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadingPhoto"
+
+  /systems/{systemId}/reading-sessions/{sessionId}/analyze:
+    post:
+      operationId: analyzeReadingSession
+      tags: [reading-sessions]
+      summary: Run AI analysis on uploaded photos to extract and evaluate readings
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResult"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +359,299 @@ components:
       required:
         - status
 
+    VrfSystem:
+      type: object
+      required: [id, code, name, vrfType, createdAt]
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        name:
+          type: string
+        location:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        vrfType:
+          type: string
+          enum: [multi_v_ii, multi_v_iii, multi_v_iv, multi_v_5]
+        startupDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        healthStatus:
+          type: ["string", "null"]
+          enum: [healthy, warning, critical, null]
+        lastReadingDate:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    VrfSystemInput:
+      type: object
+      required: [code, name, vrfType]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        location:
+          type: string
+        model:
+          type: string
+        vrfType:
+          type: string
+          enum: [multi_v_ii, multi_v_iii, multi_v_iv, multi_v_5]
+        startupDate:
+          type: string
+        notes:
+          type: string
+
+    VrfSystemUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        location:
+          type: string
+        model:
+          type: string
+        vrfType:
+          type: string
+          enum: [multi_v_ii, multi_v_iii, multi_v_iv, multi_v_5]
+        startupDate:
+          type: string
+        notes:
+          type: string
+
+    Dashboard:
+      type: object
+      required: [totalSystems, healthySystems, warningSystems, criticalSystems, recentSessions]
+      properties:
+        totalSystems:
+          type: integer
+        healthySystems:
+          type: integer
+        warningSystems:
+          type: integer
+        criticalSystems:
+          type: integer
+        unknownSystems:
+          type: integer
+        recentSessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReadingSession"
+
+    SystemSummary:
+      type: object
+      required: [system, totalSessions, latestHealthStatus, parameterTrends]
+      properties:
+        system:
+          $ref: "#/components/schemas/VrfSystem"
+        totalSessions:
+          type: integer
+        latestHealthStatus:
+          type: ["string", "null"]
+        latestAnalysis:
+          type: ["string", "null"]
+        parameterTrends:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParameterTrend"
+
+    ParameterTrend:
+      type: object
+      required: [parameter, unit, values]
+      properties:
+        parameter:
+          type: string
+        unit:
+          type: string
+        values:
+          type: array
+          items:
+            type: object
+            required: [date, value, status]
+            properties:
+              date:
+                type: string
+              value:
+                type: ["number", "null"]
+              status:
+                type: string
+
+    StartupReport:
+      type: object
+      required: [id, systemId, filename, uploadedAt, processingStatus]
+      properties:
+        id:
+          type: integer
+        systemId:
+          type: integer
+        filename:
+          type: string
+        fileUrl:
+          type: string
+        uploadedAt:
+          type: string
+        processingStatus:
+          type: string
+          enum: [pending, processing, done, error]
+        extractedData:
+          type: ["object", "null"]
+        errorMessage:
+          type: ["string", "null"]
+
+    StartupReportUpload:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+
+    ReadingSession:
+      type: object
+      required: [id, systemId, sessionDate, mode, createdAt]
+      properties:
+        id:
+          type: integer
+        systemId:
+          type: integer
+        sessionDate:
+          type: string
+        mode:
+          type: string
+          enum: [cooling, heating]
+        notes:
+          type: ["string", "null"]
+        healthStatus:
+          type: ["string", "null"]
+          enum: [healthy, warning, critical, null]
+        analysisResult:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ReadingSessionInput:
+      type: object
+      required: [sessionDate, mode]
+      properties:
+        sessionDate:
+          type: string
+        mode:
+          type: string
+          enum: [cooling, heating]
+        notes:
+          type: string
+
+    ReadingSessionDetail:
+      type: object
+      required: [id, systemId, sessionDate, mode, createdAt, photos, readings]
+      properties:
+        id:
+          type: integer
+        systemId:
+          type: integer
+        sessionDate:
+          type: string
+        mode:
+          type: string
+          enum: [cooling, heating]
+        notes:
+          type: ["string", "null"]
+        healthStatus:
+          type: ["string", "null"]
+        analysisResult:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        photos:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReadingPhoto"
+        readings:
+          type: array
+          items:
+            $ref: "#/components/schemas/LgmvReading"
+
+    ReadingPhoto:
+      type: object
+      required: [id, sessionId, filename, fileUrl, uploadedAt]
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        filename:
+          type: string
+        fileUrl:
+          type: string
+        uploadedAt:
+          type: string
+
+    PhotoUpload:
+      type: object
+      required: [photo]
+      properties:
+        photo:
+          type: string
+          format: binary
+
+    LgmvReading:
+      type: object
+      required: [id, sessionId, parameter, unit, status]
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        parameter:
+          type: string
+        unit:
+          type: string
+        value:
+          type: ["number", "null"]
+        minNormal:
+          type: ["number", "null"]
+        maxNormal:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [normal, warning, critical, unknown]
+        baselineValue:
+          type: ["number", "null"]
+        deviationPercent:
+          type: ["number", "null"]
+
+    AnalysisResult:
+      type: object
+      required: [sessionId, healthStatus, summary, readings, insights, recommendations]
+      properties:
+        sessionId:
+          type: integer
+        healthStatus:
+          type: string
+          enum: [healthy, warning, critical]
+        summary:
+          type: string
+        readings:
+          type: array
+          items:
+            $ref: "#/components/schemas/LgmvReading"
+        insights:
+          type: array
+          items:
+            type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+        maintenanceRequired:
+          type: boolean
