@@ -18,7 +18,9 @@ import type {
 
 import type {
   AnalysisResult,
+  AttachExtractionInput,
   Dashboard,
+  ExtractStartupPdfResult,
   HealthStatus,
   PhotoUpload,
   ReadingPhoto,
@@ -697,6 +699,186 @@ export function useGetSystemSummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Parses a startup report PDF using AI and returns suggested form fields plus baseline readings. The file is staged on the server and can be attached to a system afterwards via POST /systems/{systemId}/startup-reports/from-extraction.
+ * @summary Extract system data from a startup PDF without persisting anything
+ */
+export const getExtractStartupPdfUrl = () => {
+  return `/api/systems/extract-startup-pdf`;
+};
+
+export const extractStartupPdf = async (
+  startupReportUpload: StartupReportUpload,
+  options?: RequestInit,
+): Promise<ExtractStartupPdfResult> => {
+  const formData = new FormData();
+  formData.append(`file`, startupReportUpload.file);
+
+  return customFetch<ExtractStartupPdfResult>(getExtractStartupPdfUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getExtractStartupPdfMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof extractStartupPdf>>,
+    TError,
+    { data: BodyType<StartupReportUpload> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof extractStartupPdf>>,
+  TError,
+  { data: BodyType<StartupReportUpload> },
+  TContext
+> => {
+  const mutationKey = ["extractStartupPdf"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof extractStartupPdf>>,
+    { data: BodyType<StartupReportUpload> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return extractStartupPdf(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ExtractStartupPdfMutationResult = NonNullable<
+  Awaited<ReturnType<typeof extractStartupPdf>>
+>;
+export type ExtractStartupPdfMutationBody = BodyType<StartupReportUpload>;
+export type ExtractStartupPdfMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Extract system data from a startup PDF without persisting anything
+ */
+export const useExtractStartupPdf = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof extractStartupPdf>>,
+    TError,
+    { data: BodyType<StartupReportUpload> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof extractStartupPdf>>,
+  TError,
+  { data: BodyType<StartupReportUpload> },
+  TContext
+> => {
+  return useMutation(getExtractStartupPdfMutationOptions(options));
+};
+
+/**
+ * @summary Attach a previously extracted PDF (from extractStartupPdf) to a system as a done startup report
+ */
+export const getAttachExtractedStartupReportUrl = (systemId: number) => {
+  return `/api/systems/${systemId}/startup-reports/from-extraction`;
+};
+
+export const attachExtractedStartupReport = async (
+  systemId: number,
+  attachExtractionInput: AttachExtractionInput,
+  options?: RequestInit,
+): Promise<StartupReport> => {
+  return customFetch<StartupReport>(
+    getAttachExtractedStartupReportUrl(systemId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(attachExtractionInput),
+    },
+  );
+};
+
+export const getAttachExtractedStartupReportMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof attachExtractedStartupReport>>,
+    TError,
+    { systemId: number; data: BodyType<AttachExtractionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof attachExtractedStartupReport>>,
+  TError,
+  { systemId: number; data: BodyType<AttachExtractionInput> },
+  TContext
+> => {
+  const mutationKey = ["attachExtractedStartupReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof attachExtractedStartupReport>>,
+    { systemId: number; data: BodyType<AttachExtractionInput> }
+  > = (props) => {
+    const { systemId, data } = props ?? {};
+
+    return attachExtractedStartupReport(systemId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AttachExtractedStartupReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof attachExtractedStartupReport>>
+>;
+export type AttachExtractedStartupReportMutationBody =
+  BodyType<AttachExtractionInput>;
+export type AttachExtractedStartupReportMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Attach a previously extracted PDF (from extractStartupPdf) to a system as a done startup report
+ */
+export const useAttachExtractedStartupReport = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof attachExtractedStartupReport>>,
+    TError,
+    { systemId: number; data: BodyType<AttachExtractionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof attachExtractedStartupReport>>,
+  TError,
+  { systemId: number; data: BodyType<AttachExtractionInput> },
+  TContext
+> => {
+  return useMutation(getAttachExtractedStartupReportMutationOptions(options));
+};
 
 /**
  * @summary List startup reports for a system

@@ -262,6 +262,86 @@ export interface StartupReportUpload {
   file: Blob;
 }
 
+/**
+ * @nullable
+ */
+export type ExtractedSystemFormDataVrfType =
+  | (typeof ExtractedSystemFormDataVrfType)[keyof typeof ExtractedSystemFormDataVrfType]
+  | null;
+
+export const ExtractedSystemFormDataVrfType = {
+  multi_v_ii: "multi_v_ii",
+  multi_v_iii: "multi_v_iii",
+  multi_v_iv: "multi_v_iv",
+  multi_v_5: "multi_v_5",
+} as const;
+
+/**
+ * @nullable
+ */
+export type ExtractedSystemFormDataCondensationType =
+  | (typeof ExtractedSystemFormDataCondensationType)[keyof typeof ExtractedSystemFormDataCondensationType]
+  | null;
+
+export const ExtractedSystemFormDataCondensationType = {
+  air: "air",
+  water: "water",
+} as const;
+
+export interface ExtractedSystemFormData {
+  /** @nullable */
+  code?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  building?: string | null;
+  /** @nullable */
+  location?: string | null;
+  /** @nullable */
+  floor?: string | null;
+  /** @nullable */
+  servedArea?: string | null;
+  /** @nullable */
+  model?: string | null;
+  /** @nullable */
+  vrfType?: ExtractedSystemFormDataVrfType;
+  /** @nullable */
+  condensationType?: ExtractedSystemFormDataCondensationType;
+  /** @nullable */
+  startupDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type ExtractStartupPdfResultBaselineData = {
+  [key: string]: unknown;
+} | null;
+
+export interface ExtractStartupPdfResult {
+  fileToken: string;
+  originalFilename: string;
+  formData: ExtractedSystemFormData;
+  /** @nullable */
+  baselineData?: ExtractStartupPdfResultBaselineData;
+}
+
+/**
+ * @nullable
+ */
+export type AttachExtractionInputBaselineData = {
+  [key: string]: unknown;
+} | null;
+
+export interface AttachExtractionInput {
+  fileToken: string;
+  originalFilename: string;
+  /** @nullable */
+  baselineData?: AttachExtractionInputBaselineData;
+}
+
 export type ReadingSessionInputMode =
   (typeof ReadingSessionInputMode)[keyof typeof ReadingSessionInputMode];
 

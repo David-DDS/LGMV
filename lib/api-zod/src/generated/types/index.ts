@@ -8,9 +8,16 @@
 
 export * from "./analysisResult";
 export * from "./analysisResultHealthStatus";
+export * from "./attachExtractionInput";
+export * from "./attachExtractionInputBaselineData";
 export * from "./buildingSummary";
 export * from "./buildingSummaryCondensationType";
 export * from "./dashboard";
+export * from "./extractedSystemFormData";
+export * from "./extractedSystemFormDataCondensationType";
+export * from "./extractedSystemFormDataVrfType";
+export * from "./extractStartupPdfResult";
+export * from "./extractStartupPdfResultBaselineData";
 export * from "./healthStatus";
 export * from "./lgmvReading";
 export * from "./lgmvReadingStatus";

@@ -16,7 +16,7 @@ import {
   ArrowLeft, MapPin, Server, Calendar, Upload, FileText,
   Activity, Trash2, Plus, AlertCircle, FilePlus, ChevronRight,
   Layers, Radio, BrainCircuit, Building2, Droplets, Wind,
-  RotateCw, X, FileCheck,
+  RotateCw, X, FileCheck, Pencil,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRef, useState } from "react";
@@ -155,6 +155,13 @@ export default function SystemDetail() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 shrink-0">
+        <Link href={`/systems/${systemId}/edit`}>
+          <Button variant="outline" size="sm" className="border-border/50 bg-card hover:bg-muted/30">
+            <Pencil className="h-4 w-4 md:mr-2" />
+            <span className="hidden md:inline">Editar</span>
+          </Button>
+        </Link>
         <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm" className="border-red-400/20 text-red-400 hover:bg-red-400/10 hover:border-red-400/30 shrink-0">
@@ -177,6 +184,7 @@ export default function SystemDetail() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Info grid */}

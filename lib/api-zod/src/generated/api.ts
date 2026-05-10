@@ -288,6 +288,56 @@ export const GetSystemSummaryResponse = zod.object({
 });
 
 /**
+ * Parses a startup report PDF using AI and returns suggested form fields plus baseline readings. The file is staged on the server and can be attached to a system afterwards via POST /systems/{systemId}/startup-reports/from-extraction.
+ * @summary Extract system data from a startup PDF without persisting anything
+ */
+export const ExtractStartupPdfBody = zod.object({
+  file: zod.instanceof(File),
+});
+
+export const ExtractStartupPdfResponse = zod.object({
+  fileToken: zod.string(),
+  originalFilename: zod.string(),
+  formData: zod.object({
+    code: zod.string().nullish(),
+    name: zod.string().nullish(),
+    building: zod.string().nullish(),
+    location: zod.string().nullish(),
+    floor: zod.string().nullish(),
+    servedArea: zod.string().nullish(),
+    model: zod.string().nullish(),
+    vrfType: zod
+      .union([
+        zod.literal("multi_v_ii"),
+        zod.literal("multi_v_iii"),
+        zod.literal("multi_v_iv"),
+        zod.literal("multi_v_5"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    condensationType: zod
+      .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
+      .nullish(),
+    startupDate: zod.string().nullish(),
+    notes: zod.string().nullish(),
+  }),
+  baselineData: zod.object({}).passthrough().nullish(),
+});
+
+/**
+ * @summary Attach a previously extracted PDF (from extractStartupPdf) to a system as a done startup report
+ */
+export const AttachExtractedStartupReportParams = zod.object({
+  systemId: zod.coerce.number(),
+});
+
+export const AttachExtractedStartupReportBody = zod.object({
+  fileToken: zod.string(),
+  originalFilename: zod.string(),
+  baselineData: zod.object({}).passthrough().nullish(),
+});
+
+/**
  * @summary List startup reports for a system
  */
 export const ListStartupReportsParams = zod.object({

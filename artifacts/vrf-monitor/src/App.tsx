@@ -7,6 +7,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import Dashboard from "@/pages/dashboard";
 import SystemsList from "@/pages/systems/index";
 import NewSystem from "@/pages/systems/new";
+import EditSystem from "@/pages/systems/edit";
 import SystemDetail from "@/pages/systems/detail";
 import NewSession from "@/pages/systems/new-session";
 import ReadingSession from "@/pages/systems/session";
@@ -21,6 +22,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/systems" component={SystemsList} />
         <Route path="/systems/new" component={NewSystem} />
+        <Route path="/systems/:systemId/edit" component={EditSystem} />
         <Route path="/systems/:systemId" component={SystemDetail} />
         <Route path="/systems/:systemId/sessions/new" component={NewSession} />
         <Route path="/systems/:systemId/sessions/:sessionId" component={ReadingSession} />
