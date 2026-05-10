@@ -4,27 +4,17 @@ import { z } from "zod";
 import { useCreateSystem } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft, Loader2, Server } from "lucide-react";
 import { Link } from "wouter";
 
 const VRF_TYPES = {
@@ -46,8 +36,15 @@ const systemSchema = z.object({
   startupDate: z.string().optional(),
   notes: z.string().optional(),
 });
-
 type SystemFormValues = z.infer<typeof systemSchema>;
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <FormLabel className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+      {children}
+    </FormLabel>
+  );
+}
 
 export default function NewSystem() {
   const [, setLocation] = useLocation();
@@ -57,206 +54,172 @@ export default function NewSystem() {
   const form = useForm<SystemFormValues>({
     resolver: zodResolver(systemSchema),
     defaultValues: {
-      code: "",
-      name: "",
-      location: "",
-      floor: "",
-      servedArea: "",
-      model: "",
-      vrfType: "multi_v_5",
-      startupDate: "",
-      notes: "",
+      code: "", name: "", location: "", floor: "", servedArea: "",
+      model: "", vrfType: "multi_v_5", startupDate: "", notes: "",
     },
   });
 
   function onSubmit(data: SystemFormValues) {
     createSystem.mutate({ data }, {
       onSuccess: (system) => {
-        toast({
-          title: "Sistema cadastrado",
-          description: "O sistema VRF foi registrado com sucesso.",
-        });
+        toast({ title: "Sistema cadastrado", description: "O sistema VRF foi registrado com sucesso." });
         setLocation(`/systems/${system.id}`);
       },
       onError: () => {
-        toast({
-          title: "Erro ao cadastrar",
-          description: "Nao foi possivel cadastrar o sistema. Tente novamente.",
-          variant: "destructive",
-        });
+        toast({ title: "Erro ao cadastrar", description: "Nao foi possivel cadastrar o sistema. Tente novamente.", variant: "destructive" });
       }
     });
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
       <div className="flex items-center gap-4">
         <Link href="/systems">
-          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
+          <Button variant="outline" size="icon" className="h-9 w-9 border-border/50 bg-card hover:bg-muted/30">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Cadastrar Sistema VRF</h1>
-          <p className="text-muted-foreground text-sm">Registre um novo sistema LG VRF para monitoramento.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-1">Novo Registro</p>
+          <h1 className="text-2xl font-black tracking-tight text-foreground">Cadastrar Sistema VRF</h1>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Informacoes do Sistema</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="border-border/50 bg-card">
+        {/* Card header */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,98,0,0.12)' }}>
+            <Server className="h-4 w-4" style={{ color: '#FF6200' }} />
+          </div>
+          <span className="text-sm font-bold">Informacoes do Sistema</span>
+        </div>
+
+        <CardContent className="p-6">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {/* Row 1 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormField
-                  control={form.control}
-                  name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Codigo do Sistema</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: IST-1286-17" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome / Identificacao</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Bloco A - Sistema 01" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="vrfType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo VRF</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o tipo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {(Object.entries(VRF_TYPES) as [VrfTypeKey, string][]).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="model"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Modelo (Unidade Mestre)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: CRNU260LTE5" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="location"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>Localizacao / Endereco</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Av. Presidente JK, 1909 - Vila Olimpia, SP" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="floor"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Andar</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: 12, Cobertura, Subsolo" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="servedArea"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Sistema Atende</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ex: Sala de reunioes, TI, Diretoria" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="startupDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Data de Partida</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>Observacoes</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Detalhes da instalacao, configuracoes especificas..."
-                          className="resize-none"
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <FormField control={form.control} name="code" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Codigo do Sistema</FieldLabel>
+                    <FormControl>
+                      <Input placeholder="IST-1286-17" className="bg-muted/20 border-border/50 font-mono" {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="name" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Nome / Identificacao</FieldLabel>
+                    <FormControl>
+                      <Input placeholder="Bloco A - Sistema 01" className="bg-muted/20 border-border/50" {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
               </div>
+
+              {/* Row 2 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <FormField control={form.control} name="vrfType" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Tipo VRF</FieldLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="bg-muted/20 border-border/50">
+                          <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {(Object.entries(VRF_TYPES) as [VrfTypeKey, string][]).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="model" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Modelo (Unidade Mestre)</FieldLabel>
+                    <FormControl>
+                      <Input placeholder="CRNU260LTE5" className="bg-muted/20 border-border/50 font-mono" {...field} value={field.value || ""} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
+              </div>
+
+              {/* Location */}
+              <FormField control={form.control} name="location" render={({ field }) => (
+                <FormItem>
+                  <FieldLabel>Localizacao / Endereco</FieldLabel>
+                  <FormControl>
+                    <Input placeholder="Av. Presidente JK, 1909 - Vila Olimpia, SP" className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
+                  </FormControl>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )} />
+
+              {/* Floor + Area */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <FormField control={form.control} name="floor" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Andar</FieldLabel>
+                    <FormControl>
+                      <Input placeholder="12, Cobertura, Subsolo..." className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="servedArea" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Sistema Atende</FieldLabel>
+                    <FormControl>
+                      <Input placeholder="Sala de reunioes, TI..." className="bg-muted/20 border-border/50" {...field} value={field.value || ""} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
+              </div>
+
+              {/* Startup date */}
+              <FormField control={form.control} name="startupDate" render={({ field }) => (
+                <FormItem>
+                  <FieldLabel>Data de Partida</FieldLabel>
+                  <FormControl>
+                    <Input type="date" className="bg-muted/20 border-border/50 w-full sm:w-1/2" {...field} value={field.value || ""} />
+                  </FormControl>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )} />
+
+              {/* Notes */}
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem>
+                  <FieldLabel>Observacoes</FieldLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Detalhes da instalacao, configuracoes especificas..."
+                      className="bg-muted/20 border-border/50 resize-none h-24"
+                      {...field}
+                      value={field.value || ""}
+                    />
+                  </FormControl>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )} />
 
               <div className="flex justify-end pt-2">
                 <Button
                   type="submit"
                   disabled={createSystem.isPending}
-                  className="w-full sm:w-auto"
+                  className="w-full sm:w-auto font-bold px-8"
+                  style={{ background: 'linear-gradient(135deg, #FF6200, #FF8C42)' }}
                 >
                   {createSystem.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Cadastrando...
-                    </>
-                  ) : (
-                    "Cadastrar Sistema"
-                  )}
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Cadastrando...</>
+                  ) : "Cadastrar Sistema"}
                 </Button>
               </div>
             </form>

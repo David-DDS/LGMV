@@ -1,11 +1,11 @@
 import { cn } from "@/lib/utils";
 import { getHealthColor, getHealthDotColor } from "@/lib/status-colors";
-import { Badge } from "@/components/ui/badge";
 
 interface HealthBadgeProps {
   status?: string | null;
   className?: string;
   showDot?: boolean;
+  size?: "sm" | "md";
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -15,22 +15,21 @@ const STATUS_LABELS: Record<string, string> = {
   normal: "Normal",
 };
 
-export function HealthBadge({ status, className, showDot = true }: HealthBadgeProps) {
+export function HealthBadge({ status, className, showDot = true, size = "md" }: HealthBadgeProps) {
   const displayStatus = status ? (STATUS_LABELS[status] ?? status) : "Desconhecido";
-
   return (
-    <Badge
-      variant="outline"
+    <span
       className={cn(
-        "font-medium border shadow-sm px-2.5 py-0.5",
+        "inline-flex items-center gap-1.5 rounded-full border font-semibold tracking-wide uppercase",
+        size === "sm" ? "text-[9px] px-2 py-0.5" : "text-[10px] px-2.5 py-1",
         getHealthColor(status),
         className
       )}
     >
       {showDot && (
-        <span className={cn("w-1.5 h-1.5 rounded-full mr-2 shrink-0", getHealthDotColor(status))} />
+        <span className={cn("rounded-full shrink-0 pulse-dot", size === "sm" ? "w-1 h-1" : "w-1.5 h-1.5", getHealthDotColor(status))} />
       )}
       {displayStatus}
-    </Badge>
+    </span>
   );
 }

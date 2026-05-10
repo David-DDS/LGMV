@@ -1,29 +1,20 @@
 import { useRoute, Link, useLocation } from "wouter";
 import { useCreateReadingSession, getGetSystemQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, CalendarDays } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { format } from "date-fns";
 
@@ -32,8 +23,15 @@ const sessionSchema = z.object({
   mode: z.enum(["cooling", "heating"]),
   notes: z.string().optional(),
 });
-
 type SessionFormValues = z.infer<typeof sessionSchema>;
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <FormLabel className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+      {children}
+    </FormLabel>
+  );
+}
 
 export default function NewSession() {
   const [, params] = useRoute("/systems/:systemId/sessions/new");
@@ -64,114 +62,95 @@ export default function NewSession() {
       },
       {
         onSuccess: (session) => {
-          toast({
-            title: "Sessao criada",
-            description: "Sessao de leitura criada. Envie as fotos do LGMV.",
-          });
+          toast({ title: "Sessao criada", description: "Envie as fotos do LGMV para iniciar a analise." });
           queryClient.invalidateQueries({ queryKey: getGetSystemQueryKey(systemId) });
           setLocation(`/systems/${systemId}/sessions/${session.id}`);
         },
         onError: () => {
-          toast({
-            title: "Erro ao criar sessao",
-            description: "Nao foi possivel criar a sessao. Tente novamente.",
-            variant: "destructive",
-          });
+          toast({ title: "Erro ao criar sessao", description: "Nao foi possivel criar a sessao.", variant: "destructive" });
         },
       }
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
       <div className="flex items-center gap-4">
         <Link href={`/systems/${systemId}`}>
-          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
+          <Button variant="outline" size="icon" className="h-9 w-9 border-border/50 bg-card hover:bg-muted/30">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Nova Sessao de Leitura</h1>
-          <p className="text-muted-foreground text-sm">Registre uma nova sessao de leitura LGMV.</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-1">Nova Sessao</p>
+          <h1 className="text-2xl font-black tracking-tight">Nova Sessao de Leitura</h1>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Dados da Sessao</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="border-border/50 bg-card">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/40">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <CalendarDays className="h-4 w-4 text-primary" />
+          </div>
+          <span className="text-sm font-bold">Dados da Sessao</span>
+        </div>
+        <CardContent className="p-6">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <FormField
-                  control={form.control}
-                  name="sessionDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Data e Hora da Leitura</FormLabel>
+                <FormField control={form.control} name="sessionDate" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Data e Hora da Leitura</FieldLabel>
+                    <FormControl>
+                      <Input type="datetime-local" className="bg-muted/20 border-border/50" {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="mode" render={({ field }) => (
+                  <FormItem>
+                    <FieldLabel>Modo de Operacao</FieldLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <Input type="datetime-local" {...field} />
+                        <SelectTrigger className="bg-muted/20 border-border/50">
+                          <SelectValue placeholder="Selecione o modo" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="mode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Modo de Operacao</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o modo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="cooling">Refrigeracao</SelectItem>
-                          <SelectItem value="heating">Aquecimento</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>Observacoes do Tecnico</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Condicoes ambientais, observacoes iniciais..."
-                          className="resize-none h-24"
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      <SelectContent>
+                        <SelectItem value="cooling">Refrigeracao</SelectItem>
+                        <SelectItem value="heating">Aquecimento</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )} />
               </div>
+
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem>
+                  <FieldLabel>Observacoes do Tecnico</FieldLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Condicoes ambientais, observacoes iniciais..."
+                      className="bg-muted/20 border-border/50 resize-none h-28"
+                      {...field}
+                      value={field.value || ""}
+                    />
+                  </FormControl>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )} />
 
               <div className="flex justify-end pt-2">
                 <Button
                   type="submit"
                   disabled={createSession.isPending}
-                  className="w-full sm:w-auto"
+                  className="w-full sm:w-auto font-bold px-8"
+                  style={{ background: 'linear-gradient(135deg, #FF6200, #FF8C42)' }}
                 >
                   {createSession.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Criando...
-                    </>
-                  ) : (
-                    "Criar Sessao"
-                  )}
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Criando...</>
+                  ) : "Criar Sessao"}
                 </Button>
               </div>
             </form>

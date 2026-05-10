@@ -1,16 +1,14 @@
-import { cn } from "@/lib/utils";
-
 export const getHealthColor = (status?: string | null) => {
   switch (status) {
     case "healthy":
     case "normal":
-      return "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900";
+      return "text-emerald-400 bg-emerald-400/10 border-emerald-400/20";
     case "warning":
-      return "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-400 dark:bg-amber-950/30 dark:border-amber-900";
+      return "text-amber-400 bg-amber-400/10 border-amber-400/20";
     case "critical":
-      return "text-red-600 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-950/30 dark:border-red-900";
+      return "text-red-400 bg-red-400/10 border-red-400/20";
     default:
-      return "text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-900 dark:border-slate-800";
+      return "text-slate-400 bg-slate-400/10 border-slate-400/20";
   }
 };
 
@@ -18,22 +16,22 @@ export const getHealthDotColor = (status?: string | null) => {
   switch (status) {
     case "healthy":
     case "normal":
-      return "bg-emerald-500";
+      return "bg-emerald-400";
     case "warning":
-      return "bg-amber-500";
+      return "bg-amber-400";
     case "critical":
-      return "bg-red-500";
+      return "bg-red-400";
     default:
-      return "bg-slate-400";
+      return "bg-slate-500";
   }
 };
 
 export const getModeColor = (mode: string) => {
   if (mode === "cooling") {
-    return "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-950/30 dark:border-blue-900";
+    return "text-sky-400 bg-sky-400/10 border-sky-400/20";
   }
   if (mode === "heating") {
-    return "text-orange-600 bg-orange-50 border-orange-200 dark:text-orange-400 dark:bg-orange-950/30 dark:border-orange-900";
+    return "text-orange-400 bg-orange-400/10 border-orange-400/20";
   }
-  return "text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-900 dark:border-slate-800";
+  return "text-slate-400 bg-slate-400/10 border-slate-400/20";
 };
