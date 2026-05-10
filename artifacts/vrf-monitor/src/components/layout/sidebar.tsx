@@ -5,16 +5,44 @@ import { useState } from "react";
 
 function XPIncLogo() {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="flex items-center justify-center w-8 h-8 rounded-lg" style={{ background: 'linear-gradient(135deg, #FF6200 0%, #FF8C42 100%)' }}>
-        <svg viewBox="0 0 24 24" fill="none" className="w-5 h-5">
-          <path d="M4 4L10 12L4 20H7.5L12 13.8L16.5 20H20L14 12L20 4H16.5L12 10.2L7.5 4H4Z" fill="white"/>
-        </svg>
-      </div>
-      <div className="flex flex-col leading-none">
-        <span className="font-black text-white text-base tracking-tight" style={{ letterSpacing: '-0.03em' }}>XP</span>
-        <span className="text-[9px] font-semibold tracking-[0.2em] uppercase" style={{ color: 'rgba(255,255,255,0.4)' }}>Inc.</span>
-      </div>
+    <div className="flex items-center select-none" style={{ gap: '5px' }}>
+      <span
+        style={{
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontWeight: 900,
+          fontSize: '22px',
+          color: '#ffffff',
+          letterSpacing: '-0.05em',
+          lineHeight: 1,
+        }}
+      >
+        XP
+      </span>
+      {/* Diagonal slash — the distinctive separator in the real logo */}
+      <span
+        style={{
+          display: 'inline-block',
+          width: '2px',
+          height: '19px',
+          background: '#ffffff',
+          transform: 'rotate(-18deg)',
+          borderRadius: '1px',
+          flexShrink: 0,
+          opacity: 0.95,
+        }}
+      />
+      <span
+        style={{
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontWeight: 800,
+          fontSize: '22px',
+          color: '#ffffff',
+          letterSpacing: '-0.04em',
+          lineHeight: 1,
+        }}
+      >
+        Inc.
+      </span>
     </div>
   );
 }
