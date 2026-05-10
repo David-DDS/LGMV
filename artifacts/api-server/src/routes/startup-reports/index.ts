@@ -93,7 +93,7 @@ router.post(
       .returning();
 
     // Process PDF with AI in background
-    processStartupReportAsync(report.id, req.file.path, system.vrfType).catch((err) =>
+    processStartupReportAsync(report.id, system.id, req.file.path, system.vrfType).catch((err) =>
       logger.error({ err, reportId: report.id }, "Failed to process startup report")
     );
 
@@ -329,7 +329,7 @@ router.post(
       )
       .returning();
 
-    processStartupReportAsync(updated.id, filePath, system.vrfType).catch((err) =>
+    processStartupReportAsync(updated.id, system.id, filePath, system.vrfType).catch((err) =>
       logger.error({ err, reportId: updated.id }, "Failed to reprocess startup report")
     );
 
@@ -488,9 +488,14 @@ Retorne UM UNICO JSON com esta estrutura exata:
   };
 }
 
-async function processStartupReportAsync(reportId: number, filePath: string, vrfType: string) {
+async function processStartupReportAsync(
+  reportId: number,
+  systemId: number,
+  filePath: string,
+  vrfType: string
+) {
   try {
-    const { baselineData } = await extractFromPdf(filePath);
+    const { formData, baselineData } = await extractFromPdf(filePath);
     const dataToStore = baselineData ?? { vrfType };
     await db
       .update(startupReportsTable)
@@ -499,6 +504,29 @@ async function processStartupReportAsync(reportId: number, filePath: string, vrf
         extractedData: JSON.stringify(dataToStore),
       })
       .where(eq(startupReportsTable.id, reportId));
+
+    // Sync system row with extracted PDF data (PDF is the source of truth).
+    // Only overwrite with non-empty extracted values; never wipe existing fields.
+    const systemUpdate: Record<string, unknown> = {};
+    if (formData.code) systemUpdate.code = formData.code;
+    if (formData.name) systemUpdate.name = formData.name;
+    if (formData.building) systemUpdate.building = formData.building;
+    if (formData.location) systemUpdate.location = formData.location;
+    if (formData.floor) systemUpdate.floor = formData.floor;
+    if (formData.servedArea) systemUpdate.servedArea = formData.servedArea;
+    if (formData.model) systemUpdate.model = formData.model;
+    if (formData.vrfType) systemUpdate.vrfType = formData.vrfType;
+    if (formData.condensationType) systemUpdate.condensationType = formData.condensationType;
+    if (formData.startupDate) systemUpdate.startupDate = formData.startupDate;
+    if (formData.notes) systemUpdate.notes = formData.notes;
+
+    if (Object.keys(systemUpdate).length > 0) {
+      systemUpdate.updatedAt = new Date();
+      await db
+        .update(vrfSystemsTable)
+        .set(systemUpdate)
+        .where(eq(vrfSystemsTable.id, systemId));
+    }
   } catch (err) {
     logger.error({ err, reportId }, "Error processing startup report");
     await db

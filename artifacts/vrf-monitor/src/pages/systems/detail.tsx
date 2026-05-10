@@ -4,6 +4,7 @@ import {
   useListReadingSessions, useDeleteSystem,
   useDeleteStartupReport, useReprocessStartupReport,
   getListStartupReportsQueryKey,
+  getGetSystemQueryKey, getGetSystemSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +20,7 @@ import {
   RotateCw, X, FileCheck, Pencil,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getModeColor } from "@/lib/status-colors";
 import {
@@ -64,6 +65,17 @@ export default function SystemDetail() {
     } as never,
   });
   const { data: sessions, isLoading: isLoadingSessions } = useListReadingSessions(systemId, { query: { enabled: !!systemId } as never });
+
+  // When a processing report finishes, refresh system data (PDF extraction may have updated system fields).
+  const processingCount = (reports ?? []).filter(
+    (r) => r.processingStatus === "processing" || r.processingStatus === "pending"
+  ).length;
+  useEffect(() => {
+    if (!systemId) return;
+    queryClient.invalidateQueries({ queryKey: getGetSystemQueryKey(systemId) });
+    queryClient.invalidateQueries({ queryKey: getGetSystemSummaryQueryKey(systemId) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processingCount, systemId]);
   const deleteSystem = useDeleteSystem();
   const deleteReport = useDeleteStartupReport();
   const reprocessReport = useReprocessStartupReport();
