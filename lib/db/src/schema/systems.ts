@@ -7,6 +7,8 @@ export const vrfSystemsTable = pgTable("vrf_systems", {
   code: text("code").notNull(),
   name: text("name").notNull(),
   location: text("location"),
+  floor: text("floor"),
+  servedArea: text("served_area"),
   model: text("model"),
   vrfType: text("vrf_type").notNull().default("multi_v_5"),
   startupDate: text("startup_date"),

@@ -8,12 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-const ReadingSessionInputMode = {
-  cooling: "cooling",
-  heating: "heating",
-} as const;
-type ReadingSessionInputModeValue = typeof ReadingSessionInputMode[keyof typeof ReadingSessionInputMode];
-
 import {
   Form,
   FormControl,
@@ -34,8 +28,8 @@ import {
 import { format } from "date-fns";
 
 const sessionSchema = z.object({
-  sessionDate: z.string().min(1, "Date is required"),
-  mode: z.nativeEnum(ReadingSessionInputMode),
+  sessionDate: z.string().min(1, "Data obrigatoria"),
+  mode: z.enum(["cooling", "heating"]),
   notes: z.string().optional(),
 });
 
@@ -53,37 +47,37 @@ export default function NewSession() {
     resolver: zodResolver(sessionSchema),
     defaultValues: {
       sessionDate: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-      mode: ReadingSessionInputMode.cooling,
+      mode: "cooling",
       notes: "",
     },
   });
 
   function onSubmit(data: SessionFormValues) {
     createSession.mutate(
-      { 
-        systemId, 
+      {
+        systemId,
         data: {
           sessionDate: new Date(data.sessionDate).toISOString(),
           mode: data.mode,
-          notes: data.notes
-        } 
-      }, 
+          notes: data.notes,
+        },
+      },
       {
         onSuccess: (session) => {
           toast({
-            title: "Session created",
-            description: "The reading session has been created. You can now upload photos.",
+            title: "Sessao criada",
+            description: "Sessao de leitura criada. Envie as fotos do LGMV.",
           });
           queryClient.invalidateQueries({ queryKey: getGetSystemQueryKey(systemId) });
           setLocation(`/systems/${systemId}/sessions/${session.id}`);
         },
         onError: () => {
           toast({
-            title: "Error",
-            description: "Failed to create the session. Please try again.",
+            title: "Erro ao criar sessao",
+            description: "Nao foi possivel criar a sessao. Tente novamente.",
             variant: "destructive",
           });
-        }
+        },
       }
     );
   }
@@ -92,30 +86,30 @@ export default function NewSession() {
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center gap-4">
         <Link href={`/systems/${systemId}`}>
-          <Button variant="outline" size="icon" className="h-8 w-8">
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">New Diagnostic Session</h1>
-          <p className="text-muted-foreground">Create a new session to record LGMV readings.</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Nova Sessao de Leitura</h1>
+          <p className="text-muted-foreground text-sm">Registre uma nova sessao de leitura LGMV.</p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Session Details</CardTitle>
+          <CardTitle>Dados da Sessao</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormField
                   control={form.control}
                   name="sessionDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Date & Time</FormLabel>
+                      <FormLabel>Data e Hora da Leitura</FormLabel>
                       <FormControl>
                         <Input type="datetime-local" {...field} />
                       </FormControl>
@@ -123,40 +117,38 @@ export default function NewSession() {
                     </FormItem>
                   )}
                 />
-                
                 <FormField
                   control={form.control}
                   name="mode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Operation Mode</FormLabel>
+                      <FormLabel>Modo de Operacao</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select mode" />
+                            <SelectValue placeholder="Selecione o modo" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value={ReadingSessionInputMode.cooling}>Cooling</SelectItem>
-                          <SelectItem value={ReadingSessionInputMode.heating}>Heating</SelectItem>
+                          <SelectItem value="cooling">Refrigeracao</SelectItem>
+                          <SelectItem value="heating">Aquecimento</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={form.control}
                   name="notes"
                   render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>Technician Notes</FormLabel>
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Observacoes do Tecnico</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Initial observations, environmental conditions..." 
-                          className="resize-none h-24" 
-                          {...field} 
+                        <Textarea
+                          placeholder="Condicoes ambientais, observacoes iniciais..."
+                          className="resize-none h-24"
+                          {...field}
                           value={field.value || ""}
                         />
                       </FormControl>
@@ -166,19 +158,19 @@ export default function NewSession() {
                 />
               </div>
 
-              <div className="flex justify-end pt-4">
-                <Button 
-                  type="submit" 
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="submit"
                   disabled={createSession.isPending}
-                  className="w-full md:w-auto"
+                  className="w-full sm:w-auto"
                 >
                   {createSession.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
+                      Criando...
                     </>
                   ) : (
-                    "Create Session"
+                    "Criar Sessao"
                   )}
                 </Button>
               </div>

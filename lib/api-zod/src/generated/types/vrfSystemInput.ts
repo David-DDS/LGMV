@@ -13,6 +13,8 @@ export interface VrfSystemInput {
   /** @minLength 1 */
   name: string;
   location?: string;
+  floor?: string;
+  servedArea?: string;
   model?: string;
   vrfType: VrfSystemInputVrfType;
   startupDate?: string;

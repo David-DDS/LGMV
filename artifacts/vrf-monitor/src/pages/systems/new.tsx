@@ -4,13 +4,6 @@ import { z } from "zod";
 import { useCreateSystem } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-const VrfSystemInputVrfType = {
-  multi_v_5: "multi_v_5",
-  multi_v_iv: "multi_v_iv",
-  multi_v_iii: "multi_v_iii",
-  multi_v_ii: "multi_v_ii",
-} as const;
-type VrfSystemInputVrfTypeValue = typeof VrfSystemInputVrfType[keyof typeof VrfSystemInputVrfType];
 
 import {
   Form,
@@ -34,12 +27,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 
+const VRF_TYPES = {
+  multi_v_5: "Multi V 5",
+  multi_v_iv: "Multi V IV",
+  multi_v_iii: "Multi V III",
+  multi_v_ii: "Multi V II",
+} as const;
+type VrfTypeKey = keyof typeof VRF_TYPES;
+
 const systemSchema = z.object({
-  code: z.string().min(1, "System code is required"),
-  name: z.string().min(1, "System name is required"),
+  code: z.string().min(1, "Codigo obrigatorio"),
+  name: z.string().min(1, "Nome obrigatorio"),
   location: z.string().optional(),
+  floor: z.string().optional(),
+  servedArea: z.string().optional(),
   model: z.string().optional(),
-  vrfType: z.nativeEnum(VrfSystemInputVrfType),
+  vrfType: z.enum(["multi_v_5", "multi_v_iv", "multi_v_iii", "multi_v_ii"]),
   startupDate: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -57,8 +60,10 @@ export default function NewSystem() {
       code: "",
       name: "",
       location: "",
+      floor: "",
+      servedArea: "",
       model: "",
-      vrfType: VrfSystemInputVrfType.multi_v_5,
+      vrfType: "multi_v_5",
       startupDate: "",
       notes: "",
     },
@@ -68,15 +73,15 @@ export default function NewSystem() {
     createSystem.mutate({ data }, {
       onSuccess: (system) => {
         toast({
-          title: "System created",
-          description: "The VRF system has been successfully registered.",
+          title: "Sistema cadastrado",
+          description: "O sistema VRF foi registrado com sucesso.",
         });
         setLocation(`/systems/${system.id}`);
       },
       onError: () => {
         toast({
-          title: "Error",
-          description: "Failed to create the system. Please try again.",
+          title: "Erro ao cadastrar",
+          description: "Nao foi possivel cadastrar o sistema. Tente novamente.",
           variant: "destructive",
         });
       }
@@ -87,32 +92,32 @@ export default function NewSystem() {
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center gap-4">
         <Link href="/systems">
-          <Button variant="outline" size="icon" className="h-8 w-8">
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Register New System</h1>
-          <p className="text-muted-foreground">Add a new LG VRF system to your monitoring dashboard.</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Cadastrar Sistema VRF</h1>
+          <p className="text-muted-foreground text-sm">Registre um novo sistema LG VRF para monitoramento.</p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>System Information</CardTitle>
+          <CardTitle>Informacoes do Sistema</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <FormField
                   control={form.control}
                   name="code"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>System Code</FormLabel>
+                      <FormLabel>Codigo do Sistema</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. SYS-001" {...field} />
+                        <Input placeholder="Ex: IST-1286-17" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -123,73 +128,94 @@ export default function NewSystem() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>System Name</FormLabel>
+                      <FormLabel>Nome / Identificacao</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Roof Unit A" {...field} />
+                        <Input placeholder="Ex: Bloco A - Sistema 01" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
                 <FormField
                   control={form.control}
                   name="vrfType"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>VRF Type</FormLabel>
+                      <FormLabel>Tipo VRF</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
+                            <SelectValue placeholder="Selecione o tipo" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value={VrfSystemInputVrfType.multi_v_5}>Multi V 5</SelectItem>
-                          <SelectItem value={VrfSystemInputVrfType.multi_v_iv}>Multi V IV</SelectItem>
-                          <SelectItem value={VrfSystemInputVrfType.multi_v_iii}>Multi V III</SelectItem>
-                          <SelectItem value={VrfSystemInputVrfType.multi_v_ii}>Multi V II</SelectItem>
+                          {(Object.entries(VRF_TYPES) as [VrfTypeKey, string][]).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
                 <FormField
                   control={form.control}
                   name="model"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Model Number</FormLabel>
+                      <FormLabel>Modelo (Unidade Mestre)</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. ARUM200LTE5" {...field} value={field.value || ""} />
+                        <Input placeholder="Ex: CRNU260LTE5" {...field} value={field.value || ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={form.control}
                   name="location"
                   render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>Location</FormLabel>
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Localizacao / Endereco</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Main Building, Roof North" {...field} value={field.value || ""} />
+                        <Input placeholder="Ex: Av. Presidente JK, 1909 - Vila Olimpia, SP" {...field} value={field.value || ""} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
+                <FormField
+                  control={form.control}
+                  name="floor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Andar</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: 12, Cobertura, Subsolo" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="servedArea"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Sistema Atende</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: Sala de reunioes, TI, Diretoria" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="startupDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Startup Date</FormLabel>
+                      <FormLabel>Data de Partida</FormLabel>
                       <FormControl>
                         <Input type="date" {...field} value={field.value || ""} />
                       </FormControl>
@@ -197,18 +223,17 @@ export default function NewSystem() {
                     </FormItem>
                   )}
                 />
-
                 <FormField
                   control={form.control}
                   name="notes"
                   render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>Additional Notes</FormLabel>
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Observacoes</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Any specific configuration or installation details..." 
-                          className="resize-none" 
-                          {...field} 
+                        <Textarea
+                          placeholder="Detalhes da instalacao, configuracoes especificas..."
+                          className="resize-none"
+                          {...field}
                           value={field.value || ""}
                         />
                       </FormControl>
@@ -218,19 +243,19 @@ export default function NewSystem() {
                 />
               </div>
 
-              <div className="flex justify-end pt-4">
-                <Button 
-                  type="submit" 
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="submit"
                   disabled={createSystem.isPending}
-                  className="w-full md:w-auto"
+                  className="w-full sm:w-auto"
                 >
                   {createSystem.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
+                      Cadastrando...
                     </>
                   ) : (
-                    "Register System"
+                    "Cadastrar Sistema"
                   )}
                 </Button>
               </div>

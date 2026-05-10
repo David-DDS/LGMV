@@ -3,6 +3,7 @@ import { eq, desc } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
+import { execFile } from "child_process";
 import { db, vrfSystemsTable, startupReportsTable } from "@workspace/db";
 import {
   ListStartupReportsParams,
@@ -124,65 +125,64 @@ router.get("/systems/:systemId/startup-reports/:reportId", async (req, res): Pro
 
 async function processStartupReportAsync(reportId: number, filePath: string, vrfType: string) {
   try {
-    const fileBuffer = fs.readFileSync(filePath);
-    const base64 = fileBuffer.toString("base64");
+    const pdfText = await new Promise<string>((resolve) => {
+      execFile("pdftotext", [filePath, "-"], (err, stdout) => {
+        if (err || !stdout.trim()) {
+          resolve("(Texto nao extraido do PDF)");
+        } else {
+          resolve(stdout.slice(0, 12000));
+        }
+      });
+    });
 
     const response = await openai.chat.completions.create({
-      model: "gpt-5.4",
-      max_completion_tokens: 8192,
+      model: "gpt-4o",
+      max_completion_tokens: 4096,
       messages: [
         {
+          role: "system",
+          content: "Voce e um especialista em sistemas de ar condicionado VRF LG. Analise relatorios de startup e extraia dados tecnicos com precisao. Retorne APENAS JSON valido, sem texto adicional.",
+        },
+        {
           role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Você é um especialista em sistemas de ar condicionado VRF LG. Analise este relatório de startup de um sistema VRF LG e extraia os dados da leitura LGMV (parâmetros medidos durante o startup).
+          content: `Analise este relatorio de startup de um sistema VRF LG (tipo: ${vrfType}) e extraia os dados de leitura LGMV.
 
-O sistema é do tipo: ${vrfType}
+TEXTO DO PDF:
+${pdfText.slice(0, 12000)}
 
-Por favor extraia e retorne um JSON com a seguinte estrutura:
+Retorne um JSON com esta estrutura:
 {
   "systemInfo": {
     "obra": "nome da obra",
-    "codigoSistema": "código",
+    "codigoSistema": "codigo",
     "modeloMestre": "modelo",
-    "numSerie": "número de série",
-    "numUnidadesInternas": número,
-    "simultaneidade": percentual,
+    "numSerie": "numero de serie",
+    "numUnidadesInternas": numero ou null,
+    "simultaneidade": percentual ou null,
     "dataStartup": "data"
   },
   "baselineReadings": {
     "cooling": {
-      "pressaoDescarga": valor em kPa ou null,
-      "pressaoSucao": valor em kPa ou null,
-      "eevUnidadeInterna": valor em Pulso ou null,
-      "eevUnidadeExterna": valor em Pulso ou null,
-      "serpentinaEntrada": valor em °C ou null,
-      "serpentinaSaida": valor em °C ou null,
-      "descargaCompressor": valor em °C ou null,
-      "superaquecimentoSucao": valor em °C ou null
+      "pressaoDescarga": valor numerico em kPa ou null,
+      "pressaoSucao": valor numerico em kPa ou null,
+      "eevUnidadeInterna": valor numerico em Pulso ou null,
+      "eevUnidadeExterna": valor numerico em Pulso ou null,
+      "serpentinaEntrada": valor numerico em C ou null,
+      "serpentinaSaida": valor numerico em C ou null,
+      "descargaCompressor": valor numerico em C ou null,
+      "superaquecimentoSucao": valor numerico em C ou null
     },
     "heating": {
-      "pressaoDescarga": valor em kPa ou null,
-      "pressaoSucao": valor em kPa ou null,
-      "eevUnidadeInterna": valor em Pulso ou null,
-      "eevUnidadeExterna": valor em Pulso ou null,
-      "superaquecimentoDescarga": valor em °C ou null,
-      "descargaCompressor": valor em °C ou null,
-      "superaquecimentoSucao": valor em °C ou null
+      "pressaoDescarga": valor numerico em kPa ou null,
+      "pressaoSucao": valor numerico em kPa ou null,
+      "eevUnidadeInterna": valor numerico em Pulso ou null,
+      "eevUnidadeExterna": valor numerico em Pulso ou null,
+      "superaquecimentoDescarga": valor numerico em C ou null,
+      "descargaCompressor": valor numerico em C ou null,
+      "superaquecimentoSucao": valor numerico em C ou null
     }
   }
-}
-
-Retorne APENAS o JSON válido, sem texto adicional.`,
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${base64}`,
-              },
-            },
-          ],
+}`,
         },
       ],
     });

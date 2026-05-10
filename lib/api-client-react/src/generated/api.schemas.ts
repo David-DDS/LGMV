@@ -39,6 +39,10 @@ export interface VrfSystem {
   /** @nullable */
   location?: string | null;
   /** @nullable */
+  floor?: string | null;
+  /** @nullable */
+  servedArea?: string | null;
+  /** @nullable */
   model?: string | null;
   vrfType: VrfSystemVrfType;
   /** @nullable */
@@ -68,6 +72,8 @@ export interface VrfSystemInput {
   /** @minLength 1 */
   name: string;
   location?: string;
+  floor?: string;
+  servedArea?: string;
   model?: string;
   vrfType: VrfSystemInputVrfType;
   startupDate?: string;
@@ -88,6 +94,8 @@ export interface VrfSystemUpdate {
   code?: string;
   name?: string;
   location?: string;
+  floor?: string;
+  servedArea?: string;
   model?: string;
   vrfType?: VrfSystemUpdateVrfType;
   startupDate?: string;

@@ -371,6 +371,10 @@ components:
           type: string
         location:
           type: ["string", "null"]
+        floor:
+          type: ["string", "null"]
+        servedArea:
+          type: ["string", "null"]
         model:
           type: ["string", "null"]
         vrfType:
@@ -400,6 +404,10 @@ components:
           minLength: 1
         location:
           type: string
+        floor:
+          type: string
+        servedArea:
+          type: string
         model:
           type: string
         vrfType:
@@ -418,6 +426,10 @@ components:
         name:
           type: string
         location:
+          type: string
+        floor:
+          type: string
+        servedArea:
           type: string
         model:
           type: string

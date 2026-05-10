@@ -15,6 +15,10 @@ export interface VrfSystem {
   /** @nullable */
   location?: string | null;
   /** @nullable */
+  floor?: string | null;
+  /** @nullable */
+  servedArea?: string | null;
+  /** @nullable */
   model?: string | null;
   vrfType: VrfSystemVrfType;
   /** @nullable */

@@ -8,14 +8,21 @@ interface HealthBadgeProps {
   showDot?: boolean;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  healthy: "Normal",
+  warning: "Alerta",
+  critical: "Critico",
+  normal: "Normal",
+};
+
 export function HealthBadge({ status, className, showDot = true }: HealthBadgeProps) {
-  const displayStatus = status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
-  
+  const displayStatus = status ? (STATUS_LABELS[status] ?? status) : "Desconhecido";
+
   return (
-    <Badge 
-      variant="outline" 
+    <Badge
+      variant="outline"
       className={cn(
-        "font-medium border shadow-sm px-2.5 py-0.5", 
+        "font-medium border shadow-sm px-2.5 py-0.5",
         getHealthColor(status),
         className
       )}

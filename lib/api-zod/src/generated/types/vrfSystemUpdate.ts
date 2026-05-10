@@ -11,6 +11,8 @@ export interface VrfSystemUpdate {
   code?: string;
   name?: string;
   location?: string;
+  floor?: string;
+  servedArea?: string;
   model?: string;
   vrfType?: VrfSystemUpdateVrfType;
   startupDate?: string;
