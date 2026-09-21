@@ -1,0 +1,2 @@
+- [Historical startup attachments](startup-originals.md) — older versions deleted original PDFs after extraction; missing originals require re-upload.
+- [Manufacturer guidance](manufacturer-guidance.md) — PDF text loses Yes/No diagram geometry; keep original pages and verify model-specific applicability.

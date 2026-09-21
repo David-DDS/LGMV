@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@theme inline {
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Matches VRF Monitor App (XP Inc brand) */
+  --color-background: #0C0D10;
+  --color-foreground: #EBEEF3;
+  --color-primary: #FF6200;
+  --color-primary-foreground: #FFFFFF;
+  --color-card: #111318;
+  --color-card-border: #1E2229;
+  --color-muted: #1A1D24;
+  --color-muted-foreground: #8490A0;
+  
+  /* Additional motion/video colors */
+  --color-accent: #2C313C;
+}
+
+:root {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #FF6200 0%, #FF9548 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #FF6200 0%, #FF9548 100%);
+}
+
+.glow-primary {
+  box-shadow: 0 0 40px rgba(255, 98, 0, 0.4), 0 0 100px rgba(255, 98, 0, 0.2);
+}

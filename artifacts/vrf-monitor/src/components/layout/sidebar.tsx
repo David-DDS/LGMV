@@ -1,6 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Server, X, Menu, Cpu } from "lucide-react";
+import {
+  LayoutDashboard, Server, X, Menu, Cpu, ChevronDown, ChevronRight,
+  Building2, Sparkles, Trash2,
+} from "lucide-react";
 import { useState } from "react";
 
 function XPIncLogo() {
@@ -28,44 +31,112 @@ function XPIncLogo() {
   );
 }
 
-const links = [
-  { href: "/", label: "Painel", icon: LayoutDashboard },
-  { href: "/systems", label: "Sistemas VRF", icon: Server },
-];
+type LeafLink = { href: string; label: string; icon: React.ElementType; matchPrefix?: boolean };
+type GroupLink = { label: string; icon: React.ElementType; basePath: string; children: LeafLink[] };
+
+const dashboardLink: LeafLink = { href: "/", label: "Painel", icon: LayoutDashboard };
+
+const systemsGroup: GroupLink = {
+  label: "Sistemas VRF",
+  icon: Server,
+  basePath: "/systems",
+  children: [
+    { href: "/systems?category=escritorios_xp", label: "Escritorios XP", icon: Building2 },
+    { href: "/systems?category=espacos_xp", label: "Espacos XP", icon: Sparkles },
+    { href: "/systems/trash", label: "Lixeira", icon: Trash2 },
+  ],
+};
+
+function isChildActive(child: LeafLink, location: string, search: string): boolean {
+  const [path, query] = child.href.split("?");
+  if (path === "/systems/trash") return location === "/systems/trash";
+  if (location !== "/systems") return false;
+  if (!query) return !search.includes("category=");
+  const params = new URLSearchParams(search);
+  const targetParams = new URLSearchParams(query);
+  for (const [k, v] of targetParams.entries()) {
+    if (params.get(k) !== v) return false;
+  }
+  return true;
+}
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const [location] = useLocation();
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const groupActive = location.startsWith(systemsGroup.basePath);
+  const [open, setOpen] = useState(groupActive);
+  const dashActive = location === dashboardLink.href;
+
   return (
     <nav className="flex-1 py-5 px-3 space-y-0.5 overflow-y-auto">
       <div className="px-3 py-1.5 mb-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/30">Menu</p>
       </div>
-      {links.map((link) => {
-        const isActive = location === link.href || (link.href !== "/" && location.startsWith(link.href));
-        return (
-          <Link key={link.href} href={link.href} onClick={onNavigate}>
-            <div
-              className={cn(
-                "flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer group relative",
-                isActive
-                  ? "bg-[rgba(255,98,0,0.12)] text-white"
-                  : "text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground/90"
-              )}
-            >
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full" style={{ background: '#FF6200' }} />
-              )}
-              <link.icon
-                className={cn("w-4 h-4 mr-3 transition-colors shrink-0", isActive ? "text-[#FF6200]" : "text-sidebar-foreground/30 group-hover:text-sidebar-foreground/60")}
-              />
-              {link.label}
-              {isActive && (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#FF6200]" />
-              )}
-            </div>
-          </Link>
-        );
-      })}
+
+      {/* Painel */}
+      <Link href={dashboardLink.href} onClick={onNavigate}>
+        <div
+          className={cn(
+            "flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer group relative",
+            dashActive
+              ? "bg-[rgba(255,98,0,0.12)] text-white"
+              : "text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground/90"
+          )}
+        >
+          {dashActive && (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full" style={{ background: '#FF6200' }} />
+          )}
+          <dashboardLink.icon
+            className={cn("w-4 h-4 mr-3 transition-colors shrink-0", dashActive ? "text-[#FF6200]" : "text-sidebar-foreground/30 group-hover:text-sidebar-foreground/60")}
+          />
+          {dashboardLink.label}
+          {dashActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#FF6200]" />}
+        </div>
+      </Link>
+
+      {/* Sistemas VRF (collapsible) */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative",
+          groupActive
+            ? "text-white"
+            : "text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground/90"
+        )}
+      >
+        <systemsGroup.icon
+          className={cn("w-4 h-4 mr-3 transition-colors shrink-0", groupActive ? "text-[#FF6200]" : "text-sidebar-foreground/30 group-hover:text-sidebar-foreground/60")}
+        />
+        <span className="flex-1 text-left">{systemsGroup.label}</span>
+        {open ? <ChevronDown className="w-3.5 h-3.5 text-sidebar-foreground/30" /> : <ChevronRight className="w-3.5 h-3.5 text-sidebar-foreground/30" />}
+      </button>
+
+      {open && (
+        <div className="mt-0.5 ml-4 pl-3 border-l border-sidebar-border/50 space-y-0.5">
+          {systemsGroup.children.map((child) => {
+            const active = isChildActive(child, location, search);
+            return (
+              <Link key={child.href} href={child.href} onClick={onNavigate}>
+                <div
+                  className={cn(
+                    "flex items-center px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-200 cursor-pointer group relative",
+                    active
+                      ? "bg-[rgba(255,98,0,0.10)] text-white"
+                      : "text-sidebar-foreground/45 hover:bg-sidebar-accent hover:text-sidebar-foreground/85"
+                  )}
+                >
+                  <child.icon
+                    className={cn("w-3.5 h-3.5 mr-2.5 transition-colors shrink-0", active ? "text-[#FF6200]" : "text-sidebar-foreground/30 group-hover:text-sidebar-foreground/60")}
+                  />
+                  {child.label}
+                  {active && <div className="ml-auto w-1 h-1 rounded-full bg-[#FF6200]" />}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </nav>
   );
 }

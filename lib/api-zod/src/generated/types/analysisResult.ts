@@ -7,6 +7,7 @@
  */
 import type { AnalysisResultHealthStatus } from "./analysisResultHealthStatus";
 import type { LgmvReading } from "./lgmvReading";
+import type { ManufacturerGuide } from "./manufacturerGuide";
 
 export interface AnalysisResult {
   sessionId: number;
@@ -16,4 +17,5 @@ export interface AnalysisResult {
   insights: string[];
   recommendations: string[];
   maintenanceRequired?: boolean;
+  manufacturerGuide?: ManufacturerGuide;
 }

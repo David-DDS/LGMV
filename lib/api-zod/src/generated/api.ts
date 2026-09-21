@@ -16,12 +16,18 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary List all VRF systems
+ * @summary List all VRF systems (excludes trashed)
  */
+export const ListSystemsQueryParams = zod.object({
+  category: zod.enum(["escritorios_xp", "espacos_xp"]).optional(),
+});
+
 export const ListSystemsResponseItem = zod.object({
   id: zod.number(),
   code: zod.string(),
   name: zod.string(),
+  category: zod.enum(["escritorios_xp", "espacos_xp"]),
+  deletedAt: zod.string().nullish(),
   location: zod.string().nullish(),
   floor: zod.string().nullish(),
   servedArea: zod.string().nullish(),
@@ -53,6 +59,7 @@ export const ListSystemsResponse = zod.array(ListSystemsResponseItem);
 export const CreateSystemBody = zod.object({
   code: zod.string().min(1),
   name: zod.string().min(1),
+  category: zod.enum(["escritorios_xp", "espacos_xp"]),
   location: zod.string().optional(),
   floor: zod.string().optional(),
   servedArea: zod.string().optional(),
@@ -108,6 +115,8 @@ export const GetDashboardResponse = zod.object({
           id: zod.number(),
           code: zod.string(),
           name: zod.string(),
+          category: zod.enum(["escritorios_xp", "espacos_xp"]),
+          deletedAt: zod.string().nullish(),
           location: zod.string().nullish(),
           floor: zod.string().nullish(),
           servedArea: zod.string().nullish(),
@@ -155,6 +164,8 @@ export const GetSystemResponse = zod.object({
   id: zod.number(),
   code: zod.string(),
   name: zod.string(),
+  category: zod.enum(["escritorios_xp", "espacos_xp"]),
+  deletedAt: zod.string().nullish(),
   location: zod.string().nullish(),
   floor: zod.string().nullish(),
   servedArea: zod.string().nullish(),
@@ -188,6 +199,7 @@ export const UpdateSystemParams = zod.object({
 export const UpdateSystemBody = zod.object({
   code: zod.string().optional(),
   name: zod.string().optional(),
+  category: zod.enum(["escritorios_xp", "espacos_xp"]).optional(),
   location: zod.string().optional(),
   floor: zod.string().optional(),
   servedArea: zod.string().optional(),
@@ -205,6 +217,8 @@ export const UpdateSystemResponse = zod.object({
   id: zod.number(),
   code: zod.string(),
   name: zod.string(),
+  category: zod.enum(["escritorios_xp", "espacos_xp"]),
+  deletedAt: zod.string().nullish(),
   location: zod.string().nullish(),
   floor: zod.string().nullish(),
   servedArea: zod.string().nullish(),
@@ -229,9 +243,87 @@ export const UpdateSystemResponse = zod.object({
 });
 
 /**
- * @summary Delete a VRF system
+ * @summary Soft-delete a VRF system (moves to trash)
  */
 export const DeleteSystemParams = zod.object({
+  systemId: zod.coerce.number(),
+});
+
+/**
+ * @summary List soft-deleted VRF systems in the trash (auto-expire after 30 days)
+ */
+export const ListTrashedSystemsResponseItem = zod.object({
+  id: zod.number(),
+  code: zod.string(),
+  name: zod.string(),
+  category: zod.enum(["escritorios_xp", "espacos_xp"]),
+  deletedAt: zod.string().nullish(),
+  location: zod.string().nullish(),
+  floor: zod.string().nullish(),
+  servedArea: zod.string().nullish(),
+  model: zod.string().nullish(),
+  vrfType: zod.enum(["multi_v_ii", "multi_v_iii", "multi_v_iv", "multi_v_5"]),
+  startupDate: zod.string().nullish(),
+  building: zod.string().nullish(),
+  condensationType: zod
+    .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
+    .nullish(),
+  notes: zod.string().nullish(),
+  healthStatus: zod
+    .union([
+      zod.literal("healthy"),
+      zod.literal("warning"),
+      zod.literal("critical"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  lastReadingDate: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const ListTrashedSystemsResponse = zod.array(
+  ListTrashedSystemsResponseItem,
+);
+
+/**
+ * @summary Restore a trashed VRF system
+ */
+export const RestoreSystemParams = zod.object({
+  systemId: zod.coerce.number(),
+});
+
+export const RestoreSystemResponse = zod.object({
+  id: zod.number(),
+  code: zod.string(),
+  name: zod.string(),
+  category: zod.enum(["escritorios_xp", "espacos_xp"]),
+  deletedAt: zod.string().nullish(),
+  location: zod.string().nullish(),
+  floor: zod.string().nullish(),
+  servedArea: zod.string().nullish(),
+  model: zod.string().nullish(),
+  vrfType: zod.enum(["multi_v_ii", "multi_v_iii", "multi_v_iv", "multi_v_5"]),
+  startupDate: zod.string().nullish(),
+  building: zod.string().nullish(),
+  condensationType: zod
+    .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
+    .nullish(),
+  notes: zod.string().nullish(),
+  healthStatus: zod
+    .union([
+      zod.literal("healthy"),
+      zod.literal("warning"),
+      zod.literal("critical"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  lastReadingDate: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Permanently delete a trashed VRF system
+ */
+export const PermanentlyDeleteSystemParams = zod.object({
   systemId: zod.coerce.number(),
 });
 
@@ -247,6 +339,8 @@ export const GetSystemSummaryResponse = zod.object({
     id: zod.number(),
     code: zod.string(),
     name: zod.string(),
+    category: zod.enum(["escritorios_xp", "espacos_xp"]),
+    deletedAt: zod.string().nullish(),
     location: zod.string().nullish(),
     floor: zod.string().nullish(),
     servedArea: zod.string().nullish(),
@@ -285,56 +379,30 @@ export const GetSystemSummaryResponse = zod.object({
       ),
     }),
   ),
+  hasStartupReport: zod
+    .boolean()
+    .describe(
+      "True quando existe ao menos um relatorio de partida processado com sucesso para o sistema.",
+    ),
+  usingLgReference: zod
+    .boolean()
+    .describe(
+      "True quando o sistema vai utilizar a tabela referencia LG como baseline padrao (condensacao a Ar e sem relatorio de partida processado).",
+    ),
 });
 
 /**
- * Parses a startup report PDF using AI and returns suggested form fields plus baseline readings. The file is staged on the server and can be attached to a system afterwards via POST /systems/{systemId}/startup-reports/from-extraction.
- * @summary Extract system data from a startup PDF without persisting anything
+ * Generates a DOCX report from persisted system, startup, reading, photo and AI-analysis data. If sessionId is omitted, all sessions are included. No new AI analysis is performed.
+
+ * @summary Export an editable Word technical report
  */
-export const ExtractStartupPdfBody = zod.object({
-  file: zod.instanceof(File),
-});
 
-export const ExtractStartupPdfResponse = zod.object({
-  fileToken: zod.string(),
-  originalFilename: zod.string(),
-  formData: zod.object({
-    code: zod.string().nullish(),
-    name: zod.string().nullish(),
-    building: zod.string().nullish(),
-    location: zod.string().nullish(),
-    floor: zod.string().nullish(),
-    servedArea: zod.string().nullish(),
-    model: zod.string().nullish(),
-    vrfType: zod
-      .union([
-        zod.literal("multi_v_ii"),
-        zod.literal("multi_v_iii"),
-        zod.literal("multi_v_iv"),
-        zod.literal("multi_v_5"),
-        zod.literal(null),
-      ])
-      .nullish(),
-    condensationType: zod
-      .union([zod.literal("air"), zod.literal("water"), zod.literal(null)])
-      .nullish(),
-    startupDate: zod.string().nullish(),
-    notes: zod.string().nullish(),
-  }),
-  baselineData: zod.object({}).passthrough().nullish(),
-});
-
-/**
- * @summary Attach a previously extracted PDF (from extractStartupPdf) to a system as a done startup report
- */
-export const AttachExtractedStartupReportParams = zod.object({
-  systemId: zod.coerce.number(),
-});
-
-export const AttachExtractedStartupReportBody = zod.object({
-  fileToken: zod.string(),
-  originalFilename: zod.string(),
-  baselineData: zod.object({}).passthrough().nullish(),
+export const ExportTechnicalReportQueryParams = zod.object({
+  sessionId: zod
+    .number()
+    .min(1)
+    .optional()
+    .describe("Export only this reading session when provided."),
 });
 
 /**
@@ -348,7 +416,7 @@ export const ListStartupReportsResponseItem = zod.object({
   id: zod.number(),
   systemId: zod.number(),
   filename: zod.string(),
-  fileUrl: zod.string().optional(),
+  fileUrl: zod.string().nullish(),
   uploadedAt: zod.string(),
   processingStatus: zod.enum(["pending", "processing", "done", "error"]),
   extractedData: zod.object({}).passthrough().nullish(),
@@ -359,7 +427,8 @@ export const ListStartupReportsResponse = zod.array(
 );
 
 /**
- * @summary Upload and process a startup report PDF
+ * Accepts PDF or image files up to 50 MB. The AI extracts baseline data from text and/or rendered pages via GPT-4o Vision.
+ * @summary Upload and process a startup report (PDF, JPG, PNG or WebP)
  */
 export const UploadStartupReportParams = zod.object({
   systemId: zod.coerce.number(),
@@ -381,7 +450,7 @@ export const GetStartupReportResponse = zod.object({
   id: zod.number(),
   systemId: zod.number(),
   filename: zod.string(),
-  fileUrl: zod.string().optional(),
+  fileUrl: zod.string().nullish(),
   uploadedAt: zod.string(),
   processingStatus: zod.enum(["pending", "processing", "done", "error"]),
   extractedData: zod.object({}).passthrough().nullish(),
@@ -408,7 +477,7 @@ export const ReprocessStartupReportResponse = zod.object({
   id: zod.number(),
   systemId: zod.number(),
   filename: zod.string(),
-  fileUrl: zod.string().optional(),
+  fileUrl: zod.string().nullish(),
   uploadedAt: zod.string(),
   processingStatus: zod.enum(["pending", "processing", "done", "error"]),
   extractedData: zod.object({}).passthrough().nullish(),
@@ -553,4 +622,67 @@ export const AnalyzeReadingSessionResponse = zod.object({
   insights: zod.array(zod.string()),
   recommendations: zod.array(zod.string()),
   maintenanceRequired: zod.boolean().optional(),
+  manufacturerGuide: zod
+    .object({
+      version: zod.number(),
+      documentId: zod.literal("lg-multi-v5-troubleshooting-2021"),
+      title: zod.string(),
+      status: zod.enum([
+        "grounded",
+        "no_match",
+        "not_applicable",
+        "unavailable",
+      ]),
+      reason: zod.string().optional(),
+      safetyNotice: zod.string(),
+      references: zod.array(
+        zod.object({
+          page: zod.number(),
+          printedPage: zod.string(),
+          title: zod.string(),
+        }),
+      ),
+      procedures: zod.array(
+        zod.object({
+          title: zod.string(),
+          evidence: zod.string(),
+          steps: zod.array(
+            zod.object({
+              instruction: zod.string(),
+              expectedResult: zod.string(),
+              onPass: zod.string(),
+              onFail: zod.string(),
+              page: zod.number(),
+              sourceQuote: zod.string(),
+            }),
+          ),
+        }),
+      ),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Metadata for the bundled LG Multi V 5 troubleshooting excerpt
+ */
+export const GetManufacturerGuideMetadataResponse = zod.object({
+  version: zod.number(),
+  documentId: zod.literal("lg-multi-v5-troubleshooting-2021"),
+  title: zod.string(),
+  year: zod.number(),
+  language: zod.literal("en"),
+  scope: zod.string(),
+  pageCount: zod.number(),
+  printedPageRange: zod.string(),
+  pdfUrl: zod.string(),
+  pageUrlTemplate: zod.string(),
+});
+
+/**
+ * @summary Get one page image from the bundled manufacturer excerpt
+ */
+export const getManufacturerGuidePagePathPageMax = 66;
+
+export const GetManufacturerGuidePageParams = zod.object({
+  page: zod.coerce.number().min(1).max(getManufacturerGuidePagePathPageMax),
 });

@@ -1,7 +1,7 @@
 import { useListSystems } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { HealthBadge } from "@/components/health-badge";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
   Server, Plus, ArrowRight, MapPin, Calendar, Layers, Radio,
@@ -143,8 +143,21 @@ function BuildingGroup({ building, systems }: { building: string; systems: Syste
   );
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  escritorios_xp: "Escritorios XP",
+  espacos_xp: "Espacos XP",
+};
+
 export default function SystemsList() {
-  const { data: systems, isLoading, error } = useListSystems();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const rawCategory = params.get("category");
+  const category =
+    rawCategory === "escritorios_xp" || rawCategory === "espacos_xp" ? rawCategory : undefined;
+
+  const { data: systems, isLoading, error } = useListSystems(
+    category ? { category } : undefined,
+  );
 
   if (isLoading) return <SystemsListSkeleton />;
 
@@ -178,8 +191,12 @@ export default function SystemsList() {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-2">Infraestrutura</p>
-          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground">Sistemas VRF</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground mb-2">
+            {category ? "Infraestrutura" : "Todos os Sistemas"}
+          </p>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight text-foreground">
+            {category ? CATEGORY_LABELS[category] : "Sistemas VRF"}
+          </h1>
         </div>
         <Link href="/systems/new">
           <Button size="sm" className="font-semibold" style={{ background: 'linear-gradient(135deg, #FF6200, #FF8C42)' }}>

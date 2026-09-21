@@ -18,10 +18,12 @@ import type {
 
 import type {
   AnalysisResult,
-  AttachExtractionInput,
   Dashboard,
-  ExtractStartupPdfResult,
+  Error,
+  ExportTechnicalReportParams,
   HealthStatus,
+  ListSystemsParams,
+  ManufacturerGuideMetadata,
   PhotoUpload,
   ReadingPhoto,
   ReadingSession,
@@ -121,43 +123,59 @@ export function useHealthCheck<
 }
 
 /**
- * @summary List all VRF systems
+ * @summary List all VRF systems (excludes trashed)
  */
-export const getListSystemsUrl = () => {
-  return `/api/systems`;
+export const getListSystemsUrl = (params?: ListSystemsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/systems?${stringifiedParams}`
+    : `/api/systems`;
 };
 
 export const listSystems = async (
+  params?: ListSystemsParams,
   options?: RequestInit,
 ): Promise<VrfSystem[]> => {
-  return customFetch<VrfSystem[]>(getListSystemsUrl(), {
+  return customFetch<VrfSystem[]>(getListSystemsUrl(params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getListSystemsQueryKey = () => {
-  return [`/api/systems`] as const;
+export const getListSystemsQueryKey = (params?: ListSystemsParams) => {
+  return [`/api/systems`, ...(params ? [params] : [])] as const;
 };
 
 export const getListSystemsQueryOptions = <
   TData = Awaited<ReturnType<typeof listSystems>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listSystems>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
+>(
+  params?: ListSystemsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSystems>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
-  const queryKey = queryOptions?.queryKey ?? getListSystemsQueryKey();
+  const queryKey = queryOptions?.queryKey ?? getListSystemsQueryKey(params);
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof listSystems>>> = ({
     signal,
-  }) => listSystems({ signal, ...requestOptions });
+  }) => listSystems(params, { signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof listSystems>>,
@@ -172,21 +190,24 @@ export type ListSystemsQueryResult = NonNullable<
 export type ListSystemsQueryError = ErrorType<unknown>;
 
 /**
- * @summary List all VRF systems
+ * @summary List all VRF systems (excludes trashed)
  */
 
 export function useListSystems<
   TData = Awaited<ReturnType<typeof listSystems>>,
   TError = ErrorType<unknown>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof listSystems>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getListSystemsQueryOptions(options);
+>(
+  params?: ListSystemsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSystems>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSystemsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -529,7 +550,7 @@ export const useUpdateSystem = <
 };
 
 /**
- * @summary Delete a VRF system
+ * @summary Soft-delete a VRF system (moves to trash)
  */
 export const getDeleteSystemUrl = (systemId: number) => {
   return `/api/systems/${systemId}`;
@@ -590,7 +611,7 @@ export type DeleteSystemMutationResult = NonNullable<
 export type DeleteSystemMutationError = ErrorType<unknown>;
 
 /**
- * @summary Delete a VRF system
+ * @summary Soft-delete a VRF system (moves to trash)
  */
 export const useDeleteSystem = <
   TError = ErrorType<unknown>,
@@ -610,6 +631,249 @@ export const useDeleteSystem = <
   TContext
 > => {
   return useMutation(getDeleteSystemMutationOptions(options));
+};
+
+/**
+ * @summary List soft-deleted VRF systems in the trash (auto-expire after 30 days)
+ */
+export const getListTrashedSystemsUrl = () => {
+  return `/api/systems/trash`;
+};
+
+export const listTrashedSystems = async (
+  options?: RequestInit,
+): Promise<VrfSystem[]> => {
+  return customFetch<VrfSystem[]>(getListTrashedSystemsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTrashedSystemsQueryKey = () => {
+  return [`/api/systems/trash`] as const;
+};
+
+export const getListTrashedSystemsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTrashedSystems>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTrashedSystems>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTrashedSystemsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTrashedSystems>>
+  > = ({ signal }) => listTrashedSystems({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTrashedSystems>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTrashedSystemsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTrashedSystems>>
+>;
+export type ListTrashedSystemsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List soft-deleted VRF systems in the trash (auto-expire after 30 days)
+ */
+
+export function useListTrashedSystems<
+  TData = Awaited<ReturnType<typeof listTrashedSystems>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTrashedSystems>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTrashedSystemsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Restore a trashed VRF system
+ */
+export const getRestoreSystemUrl = (systemId: number) => {
+  return `/api/systems/${systemId}/restore`;
+};
+
+export const restoreSystem = async (
+  systemId: number,
+  options?: RequestInit,
+): Promise<VrfSystem> => {
+  return customFetch<VrfSystem>(getRestoreSystemUrl(systemId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRestoreSystemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreSystem>>,
+    TError,
+    { systemId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restoreSystem>>,
+  TError,
+  { systemId: number },
+  TContext
+> => {
+  const mutationKey = ["restoreSystem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restoreSystem>>,
+    { systemId: number }
+  > = (props) => {
+    const { systemId } = props ?? {};
+
+    return restoreSystem(systemId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestoreSystemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restoreSystem>>
+>;
+
+export type RestoreSystemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Restore a trashed VRF system
+ */
+export const useRestoreSystem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreSystem>>,
+    TError,
+    { systemId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restoreSystem>>,
+  TError,
+  { systemId: number },
+  TContext
+> => {
+  return useMutation(getRestoreSystemMutationOptions(options));
+};
+
+/**
+ * @summary Permanently delete a trashed VRF system
+ */
+export const getPermanentlyDeleteSystemUrl = (systemId: number) => {
+  return `/api/systems/${systemId}/permanent`;
+};
+
+export const permanentlyDeleteSystem = async (
+  systemId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getPermanentlyDeleteSystemUrl(systemId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getPermanentlyDeleteSystemMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof permanentlyDeleteSystem>>,
+    TError,
+    { systemId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof permanentlyDeleteSystem>>,
+  TError,
+  { systemId: number },
+  TContext
+> => {
+  const mutationKey = ["permanentlyDeleteSystem"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof permanentlyDeleteSystem>>,
+    { systemId: number }
+  > = (props) => {
+    const { systemId } = props ?? {};
+
+    return permanentlyDeleteSystem(systemId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PermanentlyDeleteSystemMutationResult = NonNullable<
+  Awaited<ReturnType<typeof permanentlyDeleteSystem>>
+>;
+
+export type PermanentlyDeleteSystemMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Permanently delete a trashed VRF system
+ */
+export const usePermanentlyDeleteSystem = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof permanentlyDeleteSystem>>,
+    TError,
+    { systemId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof permanentlyDeleteSystem>>,
+  TError,
+  { systemId: number },
+  TContext
+> => {
+  return useMutation(getPermanentlyDeleteSystemMutationOptions(options));
 };
 
 /**
@@ -701,184 +965,124 @@ export function useGetSystemSummary<
 }
 
 /**
- * Parses a startup report PDF using AI and returns suggested form fields plus baseline readings. The file is staged on the server and can be attached to a system afterwards via POST /systems/{systemId}/startup-reports/from-extraction.
- * @summary Extract system data from a startup PDF without persisting anything
+ * Generates a DOCX report from persisted system, startup, reading, photo and AI-analysis data. If sessionId is omitted, all sessions are included. No new AI analysis is performed.
+
+ * @summary Export an editable Word technical report
  */
-export const getExtractStartupPdfUrl = () => {
-  return `/api/systems/extract-startup-pdf`;
+export const getExportTechnicalReportUrl = (
+  systemId: number,
+  params?: ExportTechnicalReportParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/systems/${systemId}/technical-report?${stringifiedParams}`
+    : `/api/systems/${systemId}/technical-report`;
 };
 
-export const extractStartupPdf = async (
-  startupReportUpload: StartupReportUpload,
+export const exportTechnicalReport = async (
+  systemId: number,
+  params?: ExportTechnicalReportParams,
   options?: RequestInit,
-): Promise<ExtractStartupPdfResult> => {
-  const formData = new FormData();
-  formData.append(`file`, startupReportUpload.file);
-
-  return customFetch<ExtractStartupPdfResult>(getExtractStartupPdfUrl(), {
+): Promise<Blob> => {
+  return customFetch<Blob>(getExportTechnicalReportUrl(systemId, params), {
     ...options,
-    method: "POST",
-    body: formData,
+    method: "GET",
   });
 };
 
-export const getExtractStartupPdfMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof extractStartupPdf>>,
-    TError,
-    { data: BodyType<StartupReportUpload> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof extractStartupPdf>>,
-  TError,
-  { data: BodyType<StartupReportUpload> },
-  TContext
-> => {
-  const mutationKey = ["extractStartupPdf"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof extractStartupPdf>>,
-    { data: BodyType<StartupReportUpload> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return extractStartupPdf(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type ExtractStartupPdfMutationResult = NonNullable<
-  Awaited<ReturnType<typeof extractStartupPdf>>
->;
-export type ExtractStartupPdfMutationBody = BodyType<StartupReportUpload>;
-export type ExtractStartupPdfMutationError = ErrorType<unknown>;
-
-/**
- * @summary Extract system data from a startup PDF without persisting anything
- */
-export const useExtractStartupPdf = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof extractStartupPdf>>,
-    TError,
-    { data: BodyType<StartupReportUpload> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof extractStartupPdf>>,
-  TError,
-  { data: BodyType<StartupReportUpload> },
-  TContext
-> => {
-  return useMutation(getExtractStartupPdfMutationOptions(options));
-};
-
-/**
- * @summary Attach a previously extracted PDF (from extractStartupPdf) to a system as a done startup report
- */
-export const getAttachExtractedStartupReportUrl = (systemId: number) => {
-  return `/api/systems/${systemId}/startup-reports/from-extraction`;
-};
-
-export const attachExtractedStartupReport = async (
+export const getExportTechnicalReportQueryKey = (
   systemId: number,
-  attachExtractionInput: AttachExtractionInput,
-  options?: RequestInit,
-): Promise<StartupReport> => {
-  return customFetch<StartupReport>(
-    getAttachExtractedStartupReportUrl(systemId),
-    {
-      ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(attachExtractionInput),
-    },
-  );
+  params?: ExportTechnicalReportParams,
+) => {
+  return [
+    `/api/systems/${systemId}/technical-report`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
-export const getAttachExtractedStartupReportMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof attachExtractedStartupReport>>,
+export const getExportTechnicalReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportTechnicalReport>>,
+  TError = ErrorType<Error>,
+>(
+  systemId: number,
+  params?: ExportTechnicalReportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof exportTechnicalReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getExportTechnicalReportQueryKey(systemId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof exportTechnicalReport>>
+  > = ({ signal }) =>
+    exportTechnicalReport(systemId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!systemId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportTechnicalReport>>,
     TError,
-    { systemId: number; data: BodyType<AttachExtractionInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof attachExtractedStartupReport>>,
-  TError,
-  { systemId: number; data: BodyType<AttachExtractionInput> },
-  TContext
-> => {
-  const mutationKey = ["attachExtractedStartupReport"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof attachExtractedStartupReport>>,
-    { systemId: number; data: BodyType<AttachExtractionInput> }
-  > = (props) => {
-    const { systemId, data } = props ?? {};
-
-    return attachExtractedStartupReport(systemId, data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
+    TData
+  > & { queryKey: QueryKey };
 };
 
-export type AttachExtractedStartupReportMutationResult = NonNullable<
-  Awaited<ReturnType<typeof attachExtractedStartupReport>>
+export type ExportTechnicalReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportTechnicalReport>>
 >;
-export type AttachExtractedStartupReportMutationBody =
-  BodyType<AttachExtractionInput>;
-export type AttachExtractedStartupReportMutationError = ErrorType<unknown>;
+export type ExportTechnicalReportQueryError = ErrorType<Error>;
 
 /**
- * @summary Attach a previously extracted PDF (from extractStartupPdf) to a system as a done startup report
+ * @summary Export an editable Word technical report
  */
-export const useAttachExtractedStartupReport = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof attachExtractedStartupReport>>,
-    TError,
-    { systemId: number; data: BodyType<AttachExtractionInput> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof attachExtractedStartupReport>>,
-  TError,
-  { systemId: number; data: BodyType<AttachExtractionInput> },
-  TContext
-> => {
-  return useMutation(getAttachExtractedStartupReportMutationOptions(options));
-};
+
+export function useExportTechnicalReport<
+  TData = Awaited<ReturnType<typeof exportTechnicalReport>>,
+  TError = ErrorType<Error>,
+>(
+  systemId: number,
+  params?: ExportTechnicalReportParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof exportTechnicalReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportTechnicalReportQueryOptions(
+    systemId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List startup reports for a system
@@ -970,7 +1174,8 @@ export function useListStartupReports<
 }
 
 /**
- * @summary Upload and process a startup report PDF
+ * Accepts PDF or image files up to 50 MB. The AI extracts baseline data from text and/or rendered pages via GPT-4o Vision.
+ * @summary Upload and process a startup report (PDF, JPG, PNG or WebP)
  */
 export const getUploadStartupReportUrl = (systemId: number) => {
   return `/api/systems/${systemId}/startup-reports`;
@@ -1036,7 +1241,7 @@ export type UploadStartupReportMutationBody = BodyType<StartupReportUpload>;
 export type UploadStartupReportMutationError = ErrorType<unknown>;
 
 /**
- * @summary Upload and process a startup report PDF
+ * @summary Upload and process a startup report (PDF, JPG, PNG or WebP)
  */
 export const useUploadStartupReport = <
   TError = ErrorType<unknown>,
@@ -1899,3 +2104,248 @@ export const useAnalyzeReadingSession = <
 > => {
   return useMutation(getAnalyzeReadingSessionMutationOptions(options));
 };
+
+/**
+ * @summary Metadata for the bundled LG Multi V 5 troubleshooting excerpt
+ */
+export const getGetManufacturerGuideMetadataUrl = () => {
+  return `/api/manufacturer-guide`;
+};
+
+export const getManufacturerGuideMetadata = async (
+  options?: RequestInit,
+): Promise<ManufacturerGuideMetadata> => {
+  return customFetch<ManufacturerGuideMetadata>(
+    getGetManufacturerGuideMetadataUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetManufacturerGuideMetadataQueryKey = () => {
+  return [`/api/manufacturer-guide`] as const;
+};
+
+export const getGetManufacturerGuideMetadataQueryOptions = <
+  TData = Awaited<ReturnType<typeof getManufacturerGuideMetadata>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getManufacturerGuideMetadata>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetManufacturerGuideMetadataQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getManufacturerGuideMetadata>>
+  > = ({ signal }) =>
+    getManufacturerGuideMetadata({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getManufacturerGuideMetadata>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetManufacturerGuideMetadataQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getManufacturerGuideMetadata>>
+>;
+export type GetManufacturerGuideMetadataQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Metadata for the bundled LG Multi V 5 troubleshooting excerpt
+ */
+
+export function useGetManufacturerGuideMetadata<
+  TData = Awaited<ReturnType<typeof getManufacturerGuideMetadata>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getManufacturerGuideMetadata>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetManufacturerGuideMetadataQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Download the bundled manufacturer excerpt PDF
+ */
+export const getGetManufacturerGuidePdfUrl = () => {
+  return `/api/manufacturer-guide/pdf`;
+};
+
+export const getManufacturerGuidePdf = async (
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetManufacturerGuidePdfUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetManufacturerGuidePdfQueryKey = () => {
+  return [`/api/manufacturer-guide/pdf`] as const;
+};
+
+export const getGetManufacturerGuidePdfQueryOptions = <
+  TData = Awaited<ReturnType<typeof getManufacturerGuidePdf>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getManufacturerGuidePdf>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetManufacturerGuidePdfQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getManufacturerGuidePdf>>
+  > = ({ signal }) => getManufacturerGuidePdf({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getManufacturerGuidePdf>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetManufacturerGuidePdfQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getManufacturerGuidePdf>>
+>;
+export type GetManufacturerGuidePdfQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Download the bundled manufacturer excerpt PDF
+ */
+
+export function useGetManufacturerGuidePdf<
+  TData = Awaited<ReturnType<typeof getManufacturerGuidePdf>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getManufacturerGuidePdf>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetManufacturerGuidePdfQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get one page image from the bundled manufacturer excerpt
+ */
+export const getGetManufacturerGuidePageUrl = (page: number) => {
+  return `/api/manufacturer-guide/pages/${page}`;
+};
+
+export const getManufacturerGuidePage = async (
+  page: number,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetManufacturerGuidePageUrl(page), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetManufacturerGuidePageQueryKey = (page: number) => {
+  return [`/api/manufacturer-guide/pages/${page}`] as const;
+};
+
+export const getGetManufacturerGuidePageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getManufacturerGuidePage>>,
+  TError = ErrorType<unknown>,
+>(
+  page: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getManufacturerGuidePage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetManufacturerGuidePageQueryKey(page);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getManufacturerGuidePage>>
+  > = ({ signal }) =>
+    getManufacturerGuidePage(page, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!page,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getManufacturerGuidePage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetManufacturerGuidePageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getManufacturerGuidePage>>
+>;
+export type GetManufacturerGuidePageQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get one page image from the bundled manufacturer excerpt
+ */
+
+export function useGetManufacturerGuidePage<
+  TData = Awaited<ReturnType<typeof getManufacturerGuidePage>>,
+  TError = ErrorType<unknown>,
+>(
+  page: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getManufacturerGuidePage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetManufacturerGuidePageQueryOptions(page, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

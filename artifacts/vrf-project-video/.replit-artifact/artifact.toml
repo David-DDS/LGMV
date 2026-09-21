@@ -1,0 +1,29 @@
+kind = "video"
+previewPath = "/vrf-project-video/"
+title = "VRF Monitor LG — Vídeo"
+description = "Vídeo animado de 40 segundos em português apresentando monitoramento VRF, análise IA, referência LG e exportação de relatório técnico Word."
+version = "1.0.0"
+id = "artifacts/vrf-project-video"
+router = "path"
+videoAspectRatio = "9:16"
+
+[[services]]
+name = "web"
+paths = [ "/vrf-project-video/" ]
+localPort = 20454
+
+[services.development]
+run = "pnpm --filter @workspace/vrf-project-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vrf-project-video", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/vrf-project-video/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20454"
+BASE_PATH = "/vrf-project-video/"

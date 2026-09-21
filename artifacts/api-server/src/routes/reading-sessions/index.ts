@@ -24,6 +24,36 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "../../lib/logger";
 import { getLgParamRanges } from "../../lib/lg-param-ranges";
 import { uploadBlob, downloadBlobBuffer, deleteBlob, isObjectStorageUrl } from "../../lib/blobStorage";
+import {
+  generateManufacturerGuide,
+} from "../../lib/manufacturer-guide";
+// Tabela referência LG (condensação a Ar) — usada como baseline padrão quando o sistema
+// é condensação a Ar e ainda não tem relatório de partida cadastrado.
+// O api-server roda com cwd = artifacts/api-server e o asset vive em src/lib/assets.
+const LG_REFERENCE_TABLE_CANDIDATES = [
+  path.join(process.cwd(), "src", "lib", "assets", "lg-reference-table.png"),
+  path.join(process.cwd(), "assets", "lg-reference-table.png"),
+];
+
+let cachedLgReferenceDataUrl: string | null = null;
+let lgReferenceLoadAttempted = false;
+function loadLgReferenceDataUrl(): string | null {
+  if (cachedLgReferenceDataUrl) return cachedLgReferenceDataUrl;
+  if (lgReferenceLoadAttempted) return null;
+  lgReferenceLoadAttempted = true;
+  for (const p of LG_REFERENCE_TABLE_CANDIDATES) {
+    try {
+      const buf = fs.readFileSync(p);
+      cachedLgReferenceDataUrl = `data:image/png;base64,${buf.toString("base64")}`;
+      logger.info({ path: p, bytes: buf.length }, "Loaded LG reference table image");
+      return cachedLgReferenceDataUrl;
+    } catch {
+      // try next
+    }
+  }
+  logger.warn({ candidates: LG_REFERENCE_TABLE_CANDIDATES }, "LG reference table image not found");
+  return null;
+}
 
 const router: IRouter = Router();
 
@@ -258,6 +288,11 @@ router.post(
       return;
     }
 
+    if (session.systemId !== params.data.systemId) {
+      res.status(404).json({ error: "Sessao nao pertence a este sistema." });
+      return;
+    }
+
     const [system] = await db
       .select()
       .from(vrfSystemsTable)
@@ -286,28 +321,39 @@ router.post(
       .where(eq(startupReportsTable.systemId, system.id))
       .orderBy(desc(startupReportsTable.uploadedAt));
 
-    if (reportsForSystem.length === 0) {
-      res.status(412).json({
-        error:
-          "Este sistema nao possui relatorio de partida cadastrado. Anexe um relatorio de partida (PDF) antes de analisar leituras LGMV para que a IA possa comparar com o baseline original.",
-      });
-      return;
-    }
+    // Sistema com condensação a AR pode usar a tabela referência LG como baseline padrão
+    // quando não há relatório de partida processado. Sistemas a Água exigem startup report.
+    const isAirCooled = system.condensationType === "air";
 
-    const latestReport = reportsForSystem.find((r) => r.processingStatus === "done" && r.extractedData);
+    let latestReport = reportsForSystem.find((r) => r.processingStatus === "done" && r.extractedData) ?? null;
+    let usingLgReference = false;
+
     if (!latestReport) {
       const stillProcessing = reportsForSystem.some(
         (r) => r.processingStatus === "processing" || r.processingStatus === "pending"
       );
-      res.status(412).json({
-        error: stillProcessing
-          ? "O relatorio de partida ainda esta sendo processado pela IA. Aguarde a conclusao para iniciar a analise."
-          : "O relatorio de partida nao pode ser processado e nao gerou baseline. Reprocesse o relatorio antes de analisar leituras LGMV.",
-      });
-      return;
+
+      if (stillProcessing) {
+        res.status(412).json({
+          error: "O relatorio de partida ainda esta sendo processado pela IA. Aguarde a conclusao para iniciar a analise.",
+        });
+        return;
+      }
+
+      if (!isAirCooled) {
+        res.status(412).json({
+          error: reportsForSystem.length === 0
+            ? "Este sistema (condensacao a agua) nao possui relatorio de partida cadastrado. Anexe um relatorio de partida antes de analisar leituras LGMV."
+            : "O relatorio de partida nao pode ser processado e nao gerou baseline. Reprocesse o relatorio antes de analisar leituras LGMV.",
+        });
+        return;
+      }
+
+      // Air-cooled fallback: use LG reference table as baseline.
+      usingLgReference = true;
     }
 
-    const baselineData = latestReport.extractedData ? JSON.parse(latestReport.extractedData) : null;
+    const baselineData = latestReport?.extractedData ? JSON.parse(latestReport.extractedData) : null;
     const paramRanges = getLgParamRanges(system.vrfType, session.mode as "cooling" | "heating");
 
     // Build photo content for AI — labelled per photo
@@ -357,7 +403,20 @@ router.post(
           null,
           2
         )}`
-      : "\nSem dados de baseline disponiveis.";
+      : usingLgReference
+        ? "\nSem relatorio de partida — usando a TABELA REFERENCIA LGMV (Equipamentos com condensacao a Ar) fornecida na imagem abaixo como baseline padrao. Compare os valores lidos contra as faixas dessa tabela para o tipo VRF e modo operacional informados."
+        : "\nSem dados de baseline disponiveis.";
+
+    // Injeta a tabela referência LG como imagem quando estamos usando ela como baseline.
+    if (usingLgReference) {
+      const refDataUrl = loadLgReferenceDataUrl();
+      if (refDataUrl) {
+        photoContents.unshift(
+          { type: "text", text: "\n--- TABELA REFERENCIA LGMV (baseline padrao para condensacao a Ar) ---" },
+          { type: "image_url", image_url: { url: refDataUrl } },
+        );
+      }
+    }
 
     const rangesText = `\nRanges normais LG (${system.vrfType}, modo ${session.mode}):\n${JSON.stringify(
       paramRanges,
@@ -450,55 +509,79 @@ Retorne APENAS um JSON valido com esta estrutura:
       return;
     }
 
-    // Delete old readings for this session
-    await db.delete(lgmvReadingsTable).where(eq(lgmvReadingsTable.sessionId, params.data.sessionId));
+    const manufacturerGuide = await generateManufacturerGuide(openai, {
+      vrfType: system.vrfType,
+      model: system.model,
+      condensationType: system.condensationType,
+      mode: session.mode,
+      healthStatus: analysisData.healthStatus,
+      notes: session.notes,
+      summary: analysisData.summary,
+      insights: analysisData.insights,
+      recommendations: analysisData.recommendations,
+      baselineSource: latestReport ? "startup-report" : usingLgReference ? "lg-air-reference" : "none",
+      readings: analysisData.readings.map((reading) => ({
+        parameter: reading.parameter,
+        value: reading.value,
+        unit: reading.unit,
+        minNormal: reading.minNormal,
+        maxNormal: reading.maxNormal,
+        baselineValue: reading.baselineValue,
+        status: reading.status,
+        source:
+          typeof reading.sourcePhotoIndex === "number" &&
+          reading.sourcePhotoIndex >= 1 &&
+          reading.sourcePhotoIndex <= photos.length
+            ? photoLabel(reading.sourcePhotoIndex - 1)
+            : "source-not-identified",
+      })),
+    });
 
-    // Insert new readings, mapping sourcePhotoIndex (1-based) to photo id
-    if (analysisData.readings && analysisData.readings.length > 0) {
-      await db.insert(lgmvReadingsTable).values(
-        analysisData.readings.map((r) => {
-          const idx =
-            typeof r.sourcePhotoIndex === "number" && r.sourcePhotoIndex >= 1 && r.sourcePhotoIndex <= photos.length
-              ? r.sourcePhotoIndex - 1
-              : null;
-          return {
-            sessionId: params.data.sessionId,
-            parameter: r.parameter,
-            unit: r.unit,
-            value: r.value,
-            minNormal: r.minNormal,
-            maxNormal: r.maxNormal,
-            status: r.status,
-            baselineValue: r.baselineValue,
-            deviationPercent: r.deviationPercent,
-            sourcePhotoId: idx !== null ? photos[idx].id : null,
-          };
+    await db.transaction(async (tx) => {
+      await tx.delete(lgmvReadingsTable).where(eq(lgmvReadingsTable.sessionId, params.data.sessionId));
+      if (analysisData.readings && analysisData.readings.length > 0) {
+        await tx.insert(lgmvReadingsTable).values(
+          analysisData.readings.map((r) => {
+            const idx =
+              typeof r.sourcePhotoIndex === "number" && r.sourcePhotoIndex >= 1 && r.sourcePhotoIndex <= photos.length
+                ? r.sourcePhotoIndex - 1
+                : null;
+            return {
+              sessionId: params.data.sessionId,
+              parameter: r.parameter,
+              unit: r.unit,
+              value: r.value,
+              minNormal: r.minNormal,
+              maxNormal: r.maxNormal,
+              status: r.status,
+              baselineValue: r.baselineValue,
+              deviationPercent: r.deviationPercent,
+              sourcePhotoId: idx !== null ? photos[idx].id : null,
+            };
+          }),
+        );
+      }
+      await tx
+        .update(readingSessionsTable)
+        .set({
+          healthStatus: analysisData.healthStatus,
+          analysisResult: JSON.stringify({
+            summary: analysisData.summary,
+            insights: analysisData.insights,
+            recommendations: analysisData.recommendations,
+            maintenanceRequired: analysisData.maintenanceRequired,
+            manufacturerGuide,
+          }),
         })
-      );
-    }
-
-    // Update session health status
-    await db
-      .update(readingSessionsTable)
-      .set({
-        healthStatus: analysisData.healthStatus,
-        analysisResult: JSON.stringify({
-          summary: analysisData.summary,
-          insights: analysisData.insights,
-          recommendations: analysisData.recommendations,
-          maintenanceRequired: analysisData.maintenanceRequired,
-        }),
-      })
-      .where(eq(readingSessionsTable.id, params.data.sessionId));
-
-    // Update system health status
-    await db
-      .update(vrfSystemsTable)
-      .set({
-        healthStatus: analysisData.healthStatus,
-        lastReadingDate: session.sessionDate,
-      })
-      .where(eq(vrfSystemsTable.id, system.id));
+        .where(eq(readingSessionsTable.id, params.data.sessionId));
+      await tx
+        .update(vrfSystemsTable)
+        .set({
+          healthStatus: analysisData.healthStatus,
+          lastReadingDate: session.sessionDate,
+        })
+        .where(eq(vrfSystemsTable.id, system.id));
+    });
 
     const labelById = new Map<number, string>();
     photos.forEach((p, i) => labelById.set(p.id, photoLabel(i)));
@@ -518,6 +601,7 @@ Retorne APENAS um JSON valido com esta estrutura:
       insights: analysisData.insights,
       recommendations: analysisData.recommendations,
       maintenanceRequired: analysisData.maintenanceRequired,
+      manufacturerGuide,
     });
   }
 );

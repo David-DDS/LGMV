@@ -5,6 +5,7 @@
  * VRF Monitor LG - API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VrfSystemCategory } from "./vrfSystemCategory";
 import type { VrfSystemCondensationType } from "./vrfSystemCondensationType";
 import type { VrfSystemHealthStatus } from "./vrfSystemHealthStatus";
 import type { VrfSystemVrfType } from "./vrfSystemVrfType";
@@ -13,6 +14,9 @@ export interface VrfSystem {
   id: number;
   code: string;
   name: string;
+  category: VrfSystemCategory;
+  /** @nullable */
+  deletedAt?: string | null;
   /** @nullable */
   location?: string | null;
   /** @nullable */

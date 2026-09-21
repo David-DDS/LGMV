@@ -1,6 +1,6 @@
 import { useRoute, Link } from "wouter";
 import {
-  useGetReadingSession, useGetSystem, useAnalyzeReadingSession,
+  useGetReadingSession, useGetSystem, useGetSystemSummary, useAnalyzeReadingSession,
   useListStartupReports, useDeleteReadingPhoto,
   getGetReadingSessionQueryKey,
 } from "@workspace/api-client-react";
@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { HealthBadge } from "@/components/health-badge";
 import { Button } from "@/components/ui/button";
+import { TechnicalReportButton } from "@/components/technical-report-button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, BrainCircuit, Activity, AlertTriangle, FileImage, Upload, Trash2 } from "lucide-react";
@@ -18,6 +19,41 @@ import { useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getModeColor } from "@/lib/status-colors";
 import { cn } from "@/lib/utils";
+import {
+  getManufacturerGuide,
+  ManufacturerGuideAvailability,
+  ManufacturerGuidePanel,
+  type ManufacturerGuide,
+} from "@/components/manufacturer-guide";
+
+type AnalysisData = {
+  summary?: string;
+  insights?: string[];
+  recommendations?: string[];
+  manufacturerGuide?: ManufacturerGuide;
+};
+
+function parseAnalysisResult(value: string | null | undefined): AnalysisData | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+    const record = parsed as Record<string, unknown>;
+    const result: AnalysisData = {};
+    if (typeof record.summary === "string") result.summary = record.summary;
+    if (Array.isArray(record.insights) && record.insights.every((item) => typeof item === "string")) {
+      result.insights = record.insights;
+    }
+    if (Array.isArray(record.recommendations) && record.recommendations.every((item) => typeof item === "string")) {
+      result.recommendations = record.recommendations;
+    }
+    const manufacturerGuide = getManufacturerGuide(record.manufacturerGuide);
+    if (manufacturerGuide) result.manufacturerGuide = manufacturerGuide;
+    return result;
+  } catch {
+    return null;
+  }
+}
 
 export default function ReadingSessionDetail() {
   const [, params] = useRoute("/systems/:systemId/sessions/:sessionId");
@@ -31,6 +67,7 @@ export default function ReadingSessionDetail() {
   const { data: system } = useGetSystem(systemId, { query: { enabled: !!systemId } as never });
   const { data: session, isLoading } = useGetReadingSession(systemId, sessionId, { query: { enabled: !!systemId && !!sessionId } as never });
   const { data: startupReports } = useListStartupReports(systemId, { query: { enabled: !!systemId } as never });
+  const { data: summary } = useGetSystemSummary(systemId, { query: { enabled: !!systemId } as never });
   const analyzeSession = useAnalyzeReadingSession();
   const deletePhoto = useDeleteReadingPhoto();
 
@@ -51,6 +88,8 @@ export default function ReadingSessionDetail() {
 
   const hasBaseline = (startupReports ?? []).some((r) => r.processingStatus === "done" && r.extractedData);
   const baselineProcessing = (startupReports ?? []).some((r) => r.processingStatus === "processing" || r.processingStatus === "pending");
+  const usingLgReference = summary?.usingLgReference === true;
+  const canAnalyze = hasBaseline || usingLgReference;
 
   const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -75,12 +114,12 @@ export default function ReadingSessionDetail() {
   };
 
   const handleAnalyze = () => {
-    if (!hasBaseline) {
+    if (!canAnalyze) {
       toast({
-        title: "Relatorio de partida obrigatorio",
+        title: "Nao e possivel analisar",
         description: baselineProcessing
           ? "O relatorio de partida ainda esta sendo processado pela IA. Aguarde a conclusao para iniciar a analise."
-          : "Anexe um relatorio de partida (PDF) ao sistema antes de analisar leituras LGMV. Sem baseline a IA nao pode comparar valores.",
+          : "Sistemas de condensacao a Agua exigem um relatorio de partida (PDF) para gerar o baseline. Anexe o relatorio na tela do sistema antes de analisar.",
         variant: "destructive",
       });
       return;
@@ -100,10 +139,8 @@ export default function ReadingSessionDetail() {
 
   if (isLoading || !session) return <SessionDetailSkeleton />;
 
-  let analysisData: { summary?: string; insights?: string[]; recommendations?: string[] } | null = null;
-  if (session.analysisResult) {
-    try { analysisData = JSON.parse(session.analysisResult); } catch { /* ignore */ }
-  }
+  const analysisData = parseAnalysisResult(session.analysisResult);
+  const guideApplicable = system?.vrfType === "multi_v_5";
 
   const getRowBg = (status: string) => {
     if (status === "normal") return "bg-emerald-400/5";
@@ -163,6 +200,8 @@ export default function ReadingSessionDetail() {
           </div>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap">
+        <TechnicalReportButton systemId={systemId} sessionId={sessionId} />
         <Button
           onClick={handleAnalyze}
           disabled={analyzeSession.isPending || !session.photos || session.photos.length === 0}
@@ -175,10 +214,33 @@ export default function ReadingSessionDetail() {
             <><BrainCircuit className="h-4 w-4 mr-2" />Analisar com IA</>
           )}
         </Button>
+        </div>
       </div>
 
-      {/* Baseline warning */}
-      {!hasBaseline && (
+      <ManufacturerGuideAvailability
+        applicable={guideApplicable}
+        hasAnalysis={analysisData !== null}
+        hasGuide={analysisData?.manufacturerGuide !== undefined}
+      />
+
+      {/* Baseline info / warning */}
+      {!hasBaseline && usingLgReference && (
+        <Card className="border-[#FF6200]/30 bg-[#FF6200]/[0.05]">
+          <CardContent className="p-4 flex items-start gap-3">
+            <BrainCircuit className="h-4 w-4 text-[#FF6200] mt-0.5 shrink-0" />
+            <div className="text-xs leading-relaxed">
+              <p className="font-bold text-[#FF6200] mb-0.5">Usando Tabela Referencia LG como baseline</p>
+              <p className="text-muted-foreground">
+                Este sistema (condensacao a Ar) nao possui relatorio de partida. A IA vai comparar as leituras LGMV contra a tabela de parametros base LG. Voce pode rodar a analise normalmente.{" "}
+                <a href="/lg-reference-table.png" target="_blank" rel="noreferrer" className="underline hover:text-[#FF6200]">Ver tabela</a>
+                {" "}ou{" "}
+                <Link href={`/systems/${systemId}`} className="underline hover:text-[#FF6200]">anexar um relatorio de partida</Link>.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {!hasBaseline && !usingLgReference && (
         <Card className="border-amber-400/30 bg-amber-400/[0.04]">
           <CardContent className="p-4 flex items-start gap-3">
             <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
@@ -187,17 +249,16 @@ export default function ReadingSessionDetail() {
               <p className="text-muted-foreground">
                 {baselineProcessing
                   ? "O relatorio de partida ainda esta sendo processado pela IA. Aguarde a conclusao para iniciar a analise."
-                  : <>Anexe um relatorio de partida (PDF) ao sistema antes de analisar leituras LGMV — sem baseline a IA nao pode comparar valores. <Link href={`/systems/${systemId}`} className="underline hover:text-amber-400">Ir para o sistema</Link>.</>}
+                  : <>Sistemas de condensacao a Agua exigem um relatorio de partida (PDF) para gerar o baseline. <Link href={`/systems/${systemId}`} className="underline hover:text-amber-400">Ir para o sistema</Link>.</>}
               </p>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Photos + Analysis */}
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Photos */}
-        <Card className="md:col-span-2 border-border/50 bg-card">
+      {/* Photos */}
+      <div className="space-y-4">
+        <Card className="border-border/50 bg-card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border/40">
             <div className="flex items-center gap-2">
               <FileImage className="h-4 w-4 text-muted-foreground/60" />
@@ -269,7 +330,7 @@ export default function ReadingSessionDetail() {
           </CardContent>
         </Card>
 
-        {/* AI Analysis */}
+        {/* AI Analysis — full width below photos for readability */}
         {analysisData ? (
           <Card className="border-[rgba(255,98,0,0.25)] bg-card relative overflow-hidden">
             <div className="absolute inset-0 opacity-[0.03]" style={{ background: 'linear-gradient(135deg, #FF6200 0%, transparent 60%)' }} />
@@ -277,40 +338,42 @@ export default function ReadingSessionDetail() {
               <BrainCircuit className="h-4 w-4" style={{ color: '#FF6200' }} />
               <span className="text-sm font-bold">Diagnostico IA</span>
             </div>
-            <CardContent className="p-5 space-y-4">
+            <CardContent className="p-6 space-y-5">
               {analysisData.summary && (
-                <p className="text-sm leading-relaxed text-muted-foreground">{analysisData.summary}</p>
+                <p className="text-sm leading-relaxed text-foreground/85 max-w-4xl">{analysisData.summary}</p>
               )}
-              {analysisData.insights && analysisData.insights.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50 mb-2 flex items-center gap-1.5">
-                    <Activity className="h-3 w-3" />Insights
-                  </p>
-                  <ul className="space-y-2">
-                    {analysisData.insights.map((insight, i) => (
-                      <li key={i} className="flex gap-2 text-xs text-muted-foreground">
-                        <span className="mt-1 w-1 h-1 rounded-full shrink-0" style={{ background: '#FF6200' }} />
-                        {insight}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {analysisData.recommendations && analysisData.recommendations.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground/50 mb-2 flex items-center gap-1.5">
-                    <AlertTriangle className="h-3 w-3 text-amber-400" />Recomendacoes
-                  </p>
-                  <ul className="space-y-2">
-                    {analysisData.recommendations.map((rec, i) => (
-                      <li key={i} className="flex gap-2.5 p-3 rounded-xl bg-muted/20 border border-border/40 text-xs text-muted-foreground">
-                        <span className="flex items-center justify-center w-4 h-4 rounded-full shrink-0 text-[9px] font-black text-white mt-0.5" style={{ background: '#FF6200' }}>{i + 1}</span>
-                        {rec}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <div className="grid gap-6 lg:grid-cols-2">
+                {analysisData.insights && analysisData.insights.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground/60 mb-3 flex items-center gap-1.5">
+                      <Activity className="h-3 w-3" />Insights
+                    </p>
+                    <ul className="space-y-2.5">
+                      {analysisData.insights.map((insight, i) => (
+                        <li key={i} className="flex gap-2.5 text-sm text-muted-foreground leading-relaxed">
+                          <span className="mt-2 w-1 h-1 rounded-full shrink-0" style={{ background: '#FF6200' }} />
+                          {insight}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {analysisData.recommendations && analysisData.recommendations.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground/60 mb-3 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3 w-3 text-amber-400" />Recomendacoes
+                    </p>
+                    <ul className="space-y-2.5">
+                      {analysisData.recommendations.map((rec, i) => (
+                        <li key={i} className="flex gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/40 text-sm text-muted-foreground leading-relaxed">
+                          <span className="flex items-center justify-center w-5 h-5 rounded-full shrink-0 text-[10px] font-black text-white mt-0.5" style={{ background: '#FF6200' }}>{i + 1}</span>
+                          {rec}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -327,6 +390,10 @@ export default function ReadingSessionDetail() {
               <p className="text-xs text-muted-foreground/40 mt-1">Adicione fotos e clique em Analisar</p>
             </CardContent>
           </Card>
+        )}
+
+        {analysisData?.manufacturerGuide && (
+          <ManufacturerGuidePanel guide={analysisData.manufacturerGuide} />
         )}
       </div>
 

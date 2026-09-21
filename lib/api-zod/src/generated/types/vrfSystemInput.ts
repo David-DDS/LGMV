@@ -5,6 +5,7 @@
  * VRF Monitor LG - API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { VrfSystemInputCategory } from "./vrfSystemInputCategory";
 import type { VrfSystemInputCondensationType } from "./vrfSystemInputCondensationType";
 import type { VrfSystemInputVrfType } from "./vrfSystemInputVrfType";
 
@@ -13,6 +14,7 @@ export interface VrfSystemInput {
   code: string;
   /** @minLength 1 */
   name: string;
+  category: VrfSystemInputCategory;
   location?: string;
   floor?: string;
   servedArea?: string;

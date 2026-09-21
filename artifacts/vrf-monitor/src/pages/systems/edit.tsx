@@ -27,6 +27,7 @@ export default function EditSystem() {
     return {
       code: system.code,
       name: system.name,
+      category: (system.category as SystemFormValues["category"]) ?? "escritorios_xp",
       building: system.building ?? "",
       condensationType: (system.condensationType as "air" | "water" | undefined) ?? undefined,
       location: system.location ?? "",

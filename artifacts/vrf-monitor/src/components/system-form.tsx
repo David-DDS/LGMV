@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Server, Building2, Droplets, Wind } from "lucide-react";
+import { Loader2, Server, Building2, Droplets, Wind, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 
 export const VRF_TYPES = {
@@ -21,9 +21,16 @@ export const VRF_TYPES = {
 } as const;
 export type VrfTypeKey = keyof typeof VRF_TYPES;
 
+export const SYSTEM_CATEGORIES = {
+  escritorios_xp: "Escritorios XP",
+  espacos_xp: "Espacos XP",
+} as const;
+export type SystemCategoryKey = keyof typeof SYSTEM_CATEGORIES;
+
 export const systemSchema = z.object({
   code: z.string().min(1, "Codigo obrigatorio"),
   name: z.string().min(1, "Nome obrigatorio"),
+  category: z.enum(["escritorios_xp", "espacos_xp"]),
   building: z.string().optional(),
   condensationType: z.enum(["air", "water"]).optional(),
   location: z.string().optional(),
@@ -39,6 +46,7 @@ export type SystemFormValues = z.infer<typeof systemSchema>;
 export const defaultSystemValues: SystemFormValues = {
   code: "",
   name: "",
+  category: "escritorios_xp",
   building: "",
   location: "",
   floor: "",
@@ -129,6 +137,29 @@ export function SystemForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-7">
+        {/* Categoria */}
+        <div className="space-y-4">
+          <SectionHeader icon={Sparkles} title="Categoria" />
+          <FormField control={form.control} name="category" render={({ field }) => (
+            <FormItem>
+              <FieldLabel>Categoria do Sistema</FieldLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger className="bg-muted/20 border-border/50">
+                    <SelectValue placeholder="Selecione a categoria" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {(Object.entries(SYSTEM_CATEGORIES) as [SystemCategoryKey, string][]).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage className="text-xs" />
+            </FormItem>
+          )} />
+        </div>
+
         {/* Edificio */}
         <div className="space-y-4">
           <SectionHeader icon={Building2} title="Edificio / Localidade" />

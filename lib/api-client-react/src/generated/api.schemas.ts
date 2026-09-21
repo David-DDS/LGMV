@@ -5,9 +5,26 @@
  * VRF Monitor LG - API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface Error {
+  error: string;
+}
+
+/**
+ * @minimum 1
+ */
+export type ExportTechnicalReportQuery = number;
+
 export interface HealthStatus {
   status: string;
 }
+
+export type VrfSystemCategory =
+  (typeof VrfSystemCategory)[keyof typeof VrfSystemCategory];
+
+export const VrfSystemCategory = {
+  escritorios_xp: "escritorios_xp",
+  espacos_xp: "espacos_xp",
+} as const;
 
 export type VrfSystemVrfType =
   (typeof VrfSystemVrfType)[keyof typeof VrfSystemVrfType];
@@ -48,6 +65,9 @@ export interface VrfSystem {
   id: number;
   code: string;
   name: string;
+  category: VrfSystemCategory;
+  /** @nullable */
+  deletedAt?: string | null;
   /** @nullable */
   location?: string | null;
   /** @nullable */
@@ -72,6 +92,14 @@ export interface VrfSystem {
   createdAt: string;
 }
 
+export type VrfSystemInputCategory =
+  (typeof VrfSystemInputCategory)[keyof typeof VrfSystemInputCategory];
+
+export const VrfSystemInputCategory = {
+  escritorios_xp: "escritorios_xp",
+  espacos_xp: "espacos_xp",
+} as const;
+
 export type VrfSystemInputVrfType =
   (typeof VrfSystemInputVrfType)[keyof typeof VrfSystemInputVrfType];
 
@@ -95,6 +123,7 @@ export interface VrfSystemInput {
   code: string;
   /** @minLength 1 */
   name: string;
+  category: VrfSystemInputCategory;
   location?: string;
   floor?: string;
   servedArea?: string;
@@ -105,6 +134,14 @@ export interface VrfSystemInput {
   condensationType?: VrfSystemInputCondensationType;
   notes?: string;
 }
+
+export type VrfSystemUpdateCategory =
+  (typeof VrfSystemUpdateCategory)[keyof typeof VrfSystemUpdateCategory];
+
+export const VrfSystemUpdateCategory = {
+  escritorios_xp: "escritorios_xp",
+  espacos_xp: "espacos_xp",
+} as const;
 
 export type VrfSystemUpdateVrfType =
   (typeof VrfSystemUpdateVrfType)[keyof typeof VrfSystemUpdateVrfType];
@@ -127,6 +164,7 @@ export const VrfSystemUpdateCondensationType = {
 export interface VrfSystemUpdate {
   code?: string;
   name?: string;
+  category?: VrfSystemUpdateCategory;
   location?: string;
   floor?: string;
   servedArea?: string;
@@ -228,6 +266,10 @@ export interface SystemSummary {
   /** @nullable */
   latestAnalysis?: string | null;
   parameterTrends: ParameterTrend[];
+  /** True quando existe ao menos um relatorio de partida processado com sucesso para o sistema. */
+  hasStartupReport: boolean;
+  /** True quando o sistema vai utilizar a tabela referencia LG como baseline padrao (condensacao a Ar e sem relatorio de partida processado). */
+  usingLgReference: boolean;
 }
 
 export type StartupReportProcessingStatus =
@@ -249,7 +291,8 @@ export interface StartupReport {
   id: number;
   systemId: number;
   filename: string;
-  fileUrl?: string;
+  /** @nullable */
+  fileUrl?: string | null;
   uploadedAt: string;
   processingStatus: StartupReportProcessingStatus;
   /** @nullable */
@@ -260,86 +303,6 @@ export interface StartupReport {
 
 export interface StartupReportUpload {
   file: Blob;
-}
-
-/**
- * @nullable
- */
-export type ExtractedSystemFormDataVrfType =
-  | (typeof ExtractedSystemFormDataVrfType)[keyof typeof ExtractedSystemFormDataVrfType]
-  | null;
-
-export const ExtractedSystemFormDataVrfType = {
-  multi_v_ii: "multi_v_ii",
-  multi_v_iii: "multi_v_iii",
-  multi_v_iv: "multi_v_iv",
-  multi_v_5: "multi_v_5",
-} as const;
-
-/**
- * @nullable
- */
-export type ExtractedSystemFormDataCondensationType =
-  | (typeof ExtractedSystemFormDataCondensationType)[keyof typeof ExtractedSystemFormDataCondensationType]
-  | null;
-
-export const ExtractedSystemFormDataCondensationType = {
-  air: "air",
-  water: "water",
-} as const;
-
-export interface ExtractedSystemFormData {
-  /** @nullable */
-  code?: string | null;
-  /** @nullable */
-  name?: string | null;
-  /** @nullable */
-  building?: string | null;
-  /** @nullable */
-  location?: string | null;
-  /** @nullable */
-  floor?: string | null;
-  /** @nullable */
-  servedArea?: string | null;
-  /** @nullable */
-  model?: string | null;
-  /** @nullable */
-  vrfType?: ExtractedSystemFormDataVrfType;
-  /** @nullable */
-  condensationType?: ExtractedSystemFormDataCondensationType;
-  /** @nullable */
-  startupDate?: string | null;
-  /** @nullable */
-  notes?: string | null;
-}
-
-/**
- * @nullable
- */
-export type ExtractStartupPdfResultBaselineData = {
-  [key: string]: unknown;
-} | null;
-
-export interface ExtractStartupPdfResult {
-  fileToken: string;
-  originalFilename: string;
-  formData: ExtractedSystemFormData;
-  /** @nullable */
-  baselineData?: ExtractStartupPdfResultBaselineData;
-}
-
-/**
- * @nullable
- */
-export type AttachExtractionInputBaselineData = {
-  [key: string]: unknown;
-} | null;
-
-export interface AttachExtractionInput {
-  fileToken: string;
-  originalFilename: string;
-  /** @nullable */
-  baselineData?: AttachExtractionInputBaselineData;
 }
 
 export type ReadingSessionInputMode =
@@ -435,6 +398,48 @@ export const AnalysisResultHealthStatus = {
   critical: "critical",
 } as const;
 
+export type ManufacturerGuideStatus =
+  (typeof ManufacturerGuideStatus)[keyof typeof ManufacturerGuideStatus];
+
+export const ManufacturerGuideStatus = {
+  grounded: "grounded",
+  no_match: "no_match",
+  not_applicable: "not_applicable",
+  unavailable: "unavailable",
+} as const;
+
+export type ManufacturerGuideReferencesItem = {
+  page: number;
+  printedPage: string;
+  title: string;
+};
+
+export type ManufacturerGuideProceduresItemStepsItem = {
+  instruction: string;
+  expectedResult: string;
+  onPass: string;
+  onFail: string;
+  page: number;
+  sourceQuote: string;
+};
+
+export type ManufacturerGuideProceduresItem = {
+  title: string;
+  evidence: string;
+  steps: ManufacturerGuideProceduresItemStepsItem[];
+};
+
+export interface ManufacturerGuide {
+  version: 1;
+  documentId: "lg-multi-v5-troubleshooting-2021";
+  title: string;
+  status: ManufacturerGuideStatus;
+  reason?: string;
+  safetyNotice: string;
+  references: ManufacturerGuideReferencesItem[];
+  procedures: ManufacturerGuideProceduresItem[];
+}
+
 export interface AnalysisResult {
   sessionId: number;
   healthStatus: AnalysisResultHealthStatus;
@@ -443,4 +448,37 @@ export interface AnalysisResult {
   insights: string[];
   recommendations: string[];
   maintenanceRequired?: boolean;
+  manufacturerGuide?: ManufacturerGuide;
 }
+
+export interface ManufacturerGuideMetadata {
+  version: 1;
+  documentId: "lg-multi-v5-troubleshooting-2021";
+  title: string;
+  year: 2021;
+  language: "en";
+  scope: string;
+  pageCount: 66;
+  printedPageRange: string;
+  pdfUrl: string;
+  pageUrlTemplate: string;
+}
+
+export type ListSystemsParams = {
+  category?: ListSystemsCategory;
+};
+
+export type ListSystemsCategory =
+  (typeof ListSystemsCategory)[keyof typeof ListSystemsCategory];
+
+export const ListSystemsCategory = {
+  escritorios_xp: "escritorios_xp",
+  espacos_xp: "espacos_xp",
+} as const;
+
+export type ExportTechnicalReportParams = {
+  /**
+   * Export only this reading session when provided.
+   */
+  sessionId?: ExportTechnicalReportQuery;
+};

@@ -66,6 +66,19 @@ export default defineConfig({
         },
         useDates: true,
         useBigInt: true,
+        operations: {
+          exportTechnicalReport: {
+            // The endpoint has both a path parameter and a query parameter.
+            // Orval otherwise gives both generated Zod declarations the same
+            // `ExportTechnicalReportParams` name, which collides with the
+            // generated query type in the package barrel.
+            zod: {
+              generate: {
+                param: false,
+              },
+            },
+          },
+        },
       },
     },
   },

@@ -22,6 +22,14 @@ const actionTypes = {
   REMOVE_TOAST: "REMOVE_TOAST",
 } as const
 
+const MAX_TOAST_TEXT = 280
+
+function clampText<T>(value: T): T {
+  if (typeof value !== "string") return value
+  if (value.length <= MAX_TOAST_TEXT) return value
+  return (value.slice(0, MAX_TOAST_TEXT) + "...") as unknown as T
+}
+
 let count = 0
 
 function genId() {
@@ -142,17 +150,28 @@ type Toast = Omit<ToasterToast, "id">
 function toast({ ...props }: Toast) {
   const id = genId()
 
+  const safeProps = {
+    ...props,
+    title: clampText(props.title),
+    description: clampText(props.description),
+  }
+
   const update = (props: ToasterToast) =>
     dispatch({
       type: "UPDATE_TOAST",
-      toast: { ...props, id },
+      toast: {
+        ...props,
+        title: clampText(props.title),
+        description: clampText(props.description),
+        id,
+      },
     })
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
   dispatch({
     type: "ADD_TOAST",
     toast: {
-      ...props,
+      ...safeProps,
       id,
       open: true,
       onOpenChange: (open) => {

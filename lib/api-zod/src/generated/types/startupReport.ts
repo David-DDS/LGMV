@@ -12,7 +12,8 @@ export interface StartupReport {
   id: number;
   systemId: number;
   filename: string;
-  fileUrl?: string;
+  /** @nullable */
+  fileUrl?: string | null;
   uploadedAt: string;
   processingStatus: StartupReportProcessingStatus;
   /** @nullable */

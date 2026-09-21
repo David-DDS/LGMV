@@ -13,32 +13,81 @@ import {
   GetStartupReportParams,
   DeleteStartupReportParams,
   ReprocessStartupReportParams,
-  AttachExtractedStartupReportParams,
-  AttachExtractedStartupReportBody,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "../../lib/logger";
 import { uploadBlob, downloadBlobBuffer, deleteBlob, isObjectStorageUrl } from "../../lib/blobStorage";
+import { renderPdfPagesToBuffers } from "../../lib/pdf";
 
 const router: IRouter = Router();
+const PDF_TOOL_TIMEOUT_MS = 120_000;
 
-// Local uploads dir is used ONLY for the short-lived "extract → preview → attach" staging flow.
-// Final persisted reports live in object storage so they survive deploys.
-const uploadsDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+// Aceita PDF e imagens (JPEG/PNG/WebP). Limite 50 MB por arquivo.
+const ACCEPTED_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+]);
+
+function mimeTypeFromFilename(filename: string): string | null {
+  const ext = path.extname(filename).toLowerCase();
+  if (ext === ".pdf") return "application/pdf";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  return null;
 }
 
-const stagingStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${unique}-${file.originalname}`);
-  },
+function fileFilter(
+  _req: unknown,
+  file: { mimetype: string; originalname: string },
+  cb: (err: Error | null, accept: boolean) => void,
+) {
+  const mime = (file.mimetype || "").toLowerCase();
+  const fallback = mimeTypeFromFilename(file.originalname || "");
+  if (ACCEPTED_MIME_TYPES.has(mime) || (fallback && ACCEPTED_MIME_TYPES.has(fallback))) {
+    cb(null, true);
+    return;
+  }
+  logger.warn(
+    { mime, filename: file.originalname },
+    "Startup report upload rejected by fileFilter",
+  );
+  cb(
+    new Error("Formato nao suportado. Envie PDF, JPG, PNG ou WebP."),
+    false,
+  );
+}
+
+const uploadMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter,
 });
 
-const uploadStaging = multer({ storage: stagingStorage, limits: { fileSize: 50 * 1024 * 1024 } });
-const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+// Wrap multer middleware to convert errors (incl. fileFilter rejects) into JSON 400s
+// instead of bubbling up to the default Express HTML error page.
+function handleMulterErrors(
+  middleware: (req: unknown, res: unknown, next: (err?: unknown) => void) => void,
+) {
+  return (req: import("express").Request, res: import("express").Response, next: import("express").NextFunction) => {
+    middleware(req, res, (err?: unknown) => {
+      if (!err) {
+        next();
+        return;
+      }
+      const message =
+        err instanceof Error ? err.message : "Falha no upload do arquivo.";
+      if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+        res.status(400).json({ error: "Arquivo muito grande. Tamanho maximo: 50 MB." });
+        return;
+      }
+      res.status(400).json({ error: message });
+    });
+  };
+}
 
 // Write a buffer to a temp file (so pdftotext can read it).
 async function writeTempPdf(buffer: Buffer): Promise<string> {
@@ -70,7 +119,7 @@ router.get("/systems/:systemId/startup-reports", async (req, res): Promise<void>
 
 router.post(
   "/systems/:systemId/startup-reports",
-  uploadMemory.single("file"),
+  handleMulterErrors(uploadMemory.single("file")),
   async (req, res): Promise<void> => {
     const params = UploadStartupReportParams.safeParse(req.params);
     if (!params.success) {
@@ -80,6 +129,16 @@ router.post(
 
     if (!req.file) {
       res.status(400).json({ error: "Nenhum arquivo enviado." });
+      return;
+    }
+
+    const mimeType =
+      (req.file.mimetype && ACCEPTED_MIME_TYPES.has(req.file.mimetype.toLowerCase())
+        ? req.file.mimetype.toLowerCase()
+        : null) || mimeTypeFromFilename(req.file.originalname) || "application/octet-stream";
+
+    if (!ACCEPTED_MIME_TYPES.has(mimeType)) {
+      res.status(400).json({ error: "Formato nao suportado. Envie PDF, JPG, PNG ou WebP." });
       return;
     }
 
@@ -97,7 +156,7 @@ router.post(
     try {
       upload = await uploadBlob({
         buffer: req.file.buffer,
-        contentType: req.file.mimetype || "application/pdf",
+        contentType: mimeType,
         folder: "startup-reports",
       });
     } catch (err) {
@@ -114,138 +173,26 @@ router.post(
         systemId: params.data.systemId,
         filename: req.file.originalname,
         fileUrl: upload.fileUrl,
+        mimeType,
         processingStatus: "processing",
       })
       .returning();
 
-    processStartupReportAsync(report.id, system.id, req.file.buffer, system.vrfType).catch((err) =>
-      logger.error({ err, reportId: report.id }, "Failed to process startup report")
+    processStartupReportAsync(
+      report.id,
+      system.id,
+      req.file.buffer,
+      mimeType,
+      system.vrfType,
+    ).catch((err) =>
+      logger.error({ err, reportId: report.id }, "Failed to process startup report"),
     );
 
     res.status(201).json({
       ...report,
       extractedData: null,
     });
-  }
-);
-
-// Extract PDF data WITHOUT persisting a system or report.
-// Stages the file on disk for short-lived preview, returns prefill data for the new-system form.
-router.post(
-  "/systems/extract-startup-pdf",
-  uploadStaging.single("file"),
-  async (req, res): Promise<void> => {
-    if (!req.file) {
-      res.status(400).json({ error: "Nenhum arquivo enviado." });
-      return;
-    }
-
-    try {
-      const result = await extractFromPdf(req.file.path);
-      res.json({
-        fileToken: req.file.filename,
-        originalFilename: req.file.originalname,
-        formData: result.formData,
-        baselineData: result.baselineData,
-      });
-    } catch (err) {
-      logger.error({ err }, "Failed to extract startup PDF");
-      fs.promises.unlink(req.file.path).catch(() => undefined);
-      res.status(500).json({
-        error: err instanceof Error ? err.message : "Falha na extracao.",
-      });
-    }
-  }
-);
-
-// Attach a previously-extracted PDF (staged via extract-startup-pdf) to a system.
-// Moves the staged file from disk to object storage so it persists.
-router.post(
-  "/systems/:systemId/startup-reports/from-extraction",
-  async (req, res): Promise<void> => {
-    const params = AttachExtractedStartupReportParams.safeParse(req.params);
-    if (!params.success) {
-      res.status(400).json({ error: params.error.message });
-      return;
-    }
-
-    const body = AttachExtractedStartupReportBody.safeParse(req.body);
-    if (!body.success) {
-      res.status(400).json({ error: body.error.message });
-      return;
-    }
-
-    const [system] = await db
-      .select()
-      .from(vrfSystemsTable)
-      .where(eq(vrfSystemsTable.id, params.data.systemId));
-    if (!system) {
-      res.status(404).json({ error: "Sistema nao encontrado." });
-      return;
-    }
-
-    // Strict fileToken validation
-    const token = body.data.fileToken;
-    if (
-      !token ||
-      token === "." ||
-      token === ".." ||
-      token.includes("/") ||
-      token.includes("\\") ||
-      token.includes("\0") ||
-      token !== path.basename(token)
-    ) {
-      res.status(400).json({ error: "fileToken invalido." });
-      return;
-    }
-    const filePath = path.join(uploadsDir, token);
-    const resolvedUploads = fs.realpathSync(uploadsDir);
-    let resolvedFile: string;
-    try {
-      resolvedFile = fs.realpathSync(filePath);
-    } catch {
-      res.status(410).json({ error: "Arquivo extraido nao esta mais disponivel." });
-      return;
-    }
-    if (!resolvedFile.startsWith(resolvedUploads + path.sep) || !fs.statSync(resolvedFile).isFile()) {
-      res.status(400).json({ error: "fileToken invalido." });
-      return;
-    }
-
-    // Move from disk to object storage so it survives.
-    const buffer = await fs.promises.readFile(resolvedFile);
-    let upload;
-    try {
-      upload = await uploadBlob({
-        buffer,
-        contentType: "application/pdf",
-        folder: "startup-reports",
-      });
-    } catch (err) {
-      req.log?.error({ err }, "Failed to upload extracted PDF to object storage");
-      res
-        .status(500)
-        .json({ error: "Falha ao salvar o relatorio no armazenamento. Tente novamente." });
-      return;
-    }
-    fs.promises.unlink(resolvedFile).catch(() => undefined);
-
-    const [report] = await db
-      .insert(startupReportsTable)
-      .values({
-        systemId: params.data.systemId,
-        filename: body.data.originalFilename,
-        fileUrl: upload.fileUrl,
-        processingStatus: "done",
-        extractedData: body.data.baselineData ? JSON.stringify(body.data.baselineData) : null,
-      })
-      .returning();
-
-    res.status(201).json({
-      ...report,
-      extractedData: report.extractedData ? JSON.parse(report.extractedData) : null,
-    });
-  }
+  },
 );
 
 router.get("/systems/:systemId/startup-reports/:reportId", async (req, res): Promise<void> => {
@@ -293,16 +240,11 @@ router.delete("/systems/:systemId/startup-reports/:reportId", async (req, res): 
     return;
   }
 
-  if (report.fileUrl) {
-    if (isObjectStorageUrl(report.fileUrl)) {
-      try {
-        await deleteBlob(report.fileUrl);
-      } catch (err) {
-        req.log?.warn({ err, reportId: report.id }, "Failed to delete report blob");
-      }
-    } else {
-      const filename = path.basename(report.fileUrl);
-      fs.promises.unlink(path.join(uploadsDir, filename)).catch(() => undefined);
+  if (report.fileUrl && isObjectStorageUrl(report.fileUrl)) {
+    try {
+      await deleteBlob(report.fileUrl);
+    } catch (err) {
+      req.log?.warn({ err, reportId: report.id }, "Failed to delete report blob");
     }
   }
 
@@ -352,20 +294,21 @@ router.post(
     }
 
     let buffer: Buffer | null = null;
-    if (isObjectStorageUrl(report.fileUrl)) {
+    if (report.fileUrl && isObjectStorageUrl(report.fileUrl)) {
       buffer = await downloadBlobBuffer(report.fileUrl);
-    } else {
-      const filename = path.basename(report.fileUrl ?? "");
-      const filePath = path.join(uploadsDir, filename);
-      if (filename && fs.existsSync(filePath)) {
-        buffer = await fs.promises.readFile(filePath);
-      }
     }
 
     if (!buffer) {
-      res.status(410).json({ error: "Arquivo original nao esta mais disponivel." });
+      res.status(410).json({ error: "Arquivo original nao esta mais disponivel. O PDF/imagem foi descartado apos a extracao." });
       return;
     }
+
+    // Prefer the authoritative MIME persisted at upload time; fall back to filename
+    // extension; finally default to PDF for legacy rows.
+    const storedMime = (report.mimeType || "").toLowerCase();
+    const reprocessMime = ACCEPTED_MIME_TYPES.has(storedMime)
+      ? storedMime
+      : mimeTypeFromFilename(report.filename) || "application/pdf";
 
     const [updated] = await db
       .update(startupReportsTable)
@@ -378,7 +321,7 @@ router.post(
       )
       .returning();
 
-    processStartupReportAsync(updated.id, system.id, buffer, system.vrfType).catch((err) =>
+    processStartupReportAsync(updated.id, system.id, buffer, reprocessMime, system.vrfType).catch((err) =>
       logger.error({ err, reportId: updated.id }, "Failed to reprocess startup report")
     );
 
@@ -391,14 +334,40 @@ router.post(
 
 async function pdfToText(filePath: string): Promise<string> {
   return new Promise((resolve) => {
-    execFile("pdftotext", [filePath, "-"], (err, stdout) => {
+    execFile("pdftotext", [filePath, "-"], { timeout: PDF_TOOL_TIMEOUT_MS }, (err, stdout) => {
       if (err || !stdout.trim()) {
-        resolve("(Texto nao extraido do PDF)");
+        resolve("");
       } else {
         resolve(stdout.slice(0, 12000));
       }
     });
   });
+}
+
+// Renderiza as primeiras paginas do PDF como JPEG (data URLs) para enviar ao GPT-4o Vision.
+async function renderPdfPagesToDataUrls(
+  filePath: string,
+  maxPages = 3,
+): Promise<string[]> {
+  try {
+    const pages = await renderPdfPagesToBuffers(filePath, maxPages);
+    return pages
+      .slice(0, maxPages)
+      .map((buffer) => `data:image/jpeg;base64,${buffer.toString("base64")}`);
+  } catch (err) {
+    logger.warn({ err }, "pdftoppm rendering failed; continuing with text only");
+    return [];
+  }
+}
+
+// Trunca mensagens longas e remove HTML/CSS bruto para nao quebrar a UI.
+function truncateForUser(input: string, max = 600): string {
+  const stripped = input
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (stripped.length <= max) return stripped;
+  return stripped.slice(0, max - 3) + "...";
 }
 
 type ExtractedFormData = {
@@ -420,29 +389,56 @@ type ExtractionResult = {
   baselineData: unknown;
 };
 
-async function extractFromPdf(filePath: string): Promise<ExtractionResult> {
-  const pdfText = await pdfToText(filePath);
+// Extrai dados de cadastro + baseline LGMV de um relatorio de partida.
+// Aceita PDF (usa pdftotext + render das primeiras paginas via Vision) ou
+// imagem direta (JPEG/PNG/WebP) enviada para Vision.
+async function extractFromFile(
+  buffer: Buffer,
+  mimeType: string,
+): Promise<ExtractionResult> {
+  let pdfText = "";
+  let imageDataUrls: string[] = [];
+  let tempPdfPath: string | null = null;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    max_completion_tokens: 4096,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Voce e um especialista em sistemas de ar condicionado VRF LG. Analise relatorios de startup e extraia dados de cadastro e baseline LGMV com precisao. Retorne APENAS JSON valido, sem texto adicional, sem markdown.",
-      },
-      {
-        role: "user",
-        content: `Analise este relatorio de startup de um sistema VRF LG e extraia DOIS conjuntos de dados:
+  try {
+    if (mimeType === "application/pdf") {
+      tempPdfPath = await writeTempPdf(buffer);
+      // Texto + imagens das primeiras paginas (melhora tabelas/graficos).
+      [pdfText, imageDataUrls] = await Promise.all([
+        pdfToText(tempPdfPath),
+        renderPdfPagesToDataUrls(tempPdfPath, 3),
+      ]);
+
+      if (!pdfText.trim() && imageDataUrls.length === 0) {
+        throw new Error(
+          "Nao foi possivel ler o conteudo do PDF (texto vazio e renderizacao falhou).",
+        );
+      }
+    } else if (mimeType.startsWith("image/")) {
+      // Para imagens enviadas direto, usa apenas Vision.
+      imageDataUrls = [`data:${mimeType};base64,${buffer.toString("base64")}`];
+    } else {
+      throw new Error(`Tipo de arquivo nao suportado para extracao: ${mimeType}`);
+    }
+
+    return await callExtractionLLM(pdfText, imageDataUrls);
+  } finally {
+    if (tempPdfPath) {
+      fs.promises.unlink(tempPdfPath).catch(() => undefined);
+    }
+  }
+}
+
+async function callExtractionLLM(
+  pdfText: string,
+  imageDataUrls: string[],
+): Promise<ExtractionResult> {
+  const promptIntro = `Analise este relatorio de startup de um sistema VRF LG e extraia DOIS conjuntos de dados:
 
 1. Dados de CADASTRO do sistema (para preencher formulario)
 2. BASELINE de leituras LGMV (para comparacao futura)
 
-TEXTO DO PDF:
-${pdfText}
-
-Retorne UM UNICO JSON com esta estrutura exata:
+${pdfText.trim() ? `TEXTO EXTRAIDO DO ARQUIVO:\n${pdfText}\n\n` : ""}${imageDataUrls.length > 0 ? `IMAGENS DO RELATORIO (paginas/foto fornecidas a seguir).\n\n` : ""}Retorne UM UNICO JSON com esta estrutura exata:
 {
   "formData": {
     "code": "codigo do sistema, ex: IST-1286-17 ou similar (string ou null)",
@@ -489,7 +485,32 @@ Retorne UM UNICO JSON com esta estrutura exata:
       }
     }
   }
-}`,
+}`;
+
+  const userContent: Array<
+    | { type: "text"; text: string }
+    | { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } }
+  > = [{ type: "text", text: promptIntro }];
+
+  for (const url of imageDataUrls) {
+    userContent.push({
+      type: "image_url",
+      image_url: { url, detail: "high" },
+    });
+  }
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    max_completion_tokens: 4096,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Voce e um especialista em sistemas de ar condicionado VRF LG. Analise relatorios de startup (PDF ou foto) e extraia dados de cadastro e baseline LGMV com precisao. Retorne APENAS JSON valido, sem texto adicional, sem markdown, sem HTML/CSS. Se um campo nao estiver visivel, use null.",
+      },
+      {
+        role: "user",
+        content: userContent,
       },
     ],
   });
@@ -541,13 +562,15 @@ async function processStartupReportAsync(
   reportId: number,
   systemId: number,
   buffer: Buffer,
+  mimeType: string,
   vrfType: string
 ) {
-  let tempPath: string | null = null;
   try {
-    tempPath = await writeTempPdf(buffer);
-    const { formData, baselineData } = await extractFromPdf(tempPath);
+    const { formData, baselineData } = await extractFromFile(buffer, mimeType);
     const dataToStore = baselineData ?? { vrfType };
+    // Preserve the original attachment. Technical report exports include all
+    // startup PDF pages as editable-document visual annexes; removing the
+    // source after extraction would make that requirement impossible to meet.
     await db
       .update(startupReportsTable)
       .set({
@@ -575,17 +598,14 @@ async function processStartupReportAsync(
     }
   } catch (err) {
     logger.error({ err, reportId }, "Error processing startup report");
+    const rawMsg = err instanceof Error ? err.message : "Erro desconhecido durante a extracao.";
     await db
       .update(startupReportsTable)
       .set({
         processingStatus: "error",
-        errorMessage: err instanceof Error ? err.message : "Unknown error",
+        errorMessage: truncateForUser(rawMsg),
       })
       .where(eq(startupReportsTable.id, reportId));
-  } finally {
-    if (tempPath) {
-      fs.promises.unlink(tempPath).catch(() => undefined);
-    }
   }
 }
 

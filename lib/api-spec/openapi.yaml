@@ -38,7 +38,14 @@ paths:
     get:
       operationId: listSystems
       tags: [systems]
-      summary: List all VRF systems
+      summary: List all VRF systems (excludes trashed)
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [escritorios_xp, espacos_xp]
       responses:
         "200":
           description: List of systems
@@ -125,7 +132,7 @@ paths:
     delete:
       operationId: deleteSystem
       tags: [systems]
-      summary: Delete a VRF system
+      summary: Soft-delete a VRF system (moves to trash)
       parameters:
         - name: systemId
           in: path
@@ -134,7 +141,56 @@ paths:
             type: integer
       responses:
         "204":
-          description: Deleted
+          description: Moved to trash
+
+  /systems/trash:
+    get:
+      operationId: listTrashedSystems
+      tags: [systems]
+      summary: List soft-deleted VRF systems in the trash (auto-expire after 30 days)
+      responses:
+        "200":
+          description: List of trashed systems
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VrfSystem"
+
+  /systems/{systemId}/restore:
+    post:
+      operationId: restoreSystem
+      tags: [systems]
+      summary: Restore a trashed VRF system
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VrfSystem"
+
+  /systems/{systemId}/permanent:
+    delete:
+      operationId: permanentlyDeleteSystem
+      tags: [systems]
+      summary: Permanently delete a trashed VRF system
+      parameters:
+        - name: systemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Permanently deleted
 
   /systems/{systemId}/summary:
     get:
@@ -155,50 +211,54 @@ paths:
               schema:
                 $ref: "#/components/schemas/SystemSummary"
 
-  /systems/extract-startup-pdf:
-    post:
-      operationId: extractStartupPdf
-      tags: [startup-reports]
-      summary: Extract system data from a startup PDF without persisting anything
-      description: Parses a startup report PDF using AI and returns suggested form fields plus baseline readings. The file is staged on the server and can be attached to a system afterwards via POST /systems/{systemId}/startup-reports/from-extraction.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: "#/components/schemas/StartupReportUpload"
-      responses:
-        "200":
-          description: Extraction succeeded
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ExtractStartupPdfResult"
-
-  /systems/{systemId}/startup-reports/from-extraction:
-    post:
-      operationId: attachExtractedStartupReport
-      tags: [startup-reports]
-      summary: Attach a previously extracted PDF (from extractStartupPdf) to a system as a done startup report
+  /systems/{systemId}/technical-report:
+    get:
+      operationId: exportTechnicalReport
+      tags: [systems]
+      summary: Export an editable Word technical report
+      description: >
+        Generates a DOCX report from persisted system, startup, reading,
+        photo and AI-analysis data. If sessionId is omitted, all sessions are
+        included. No new AI analysis is performed.
       parameters:
         - name: systemId
           in: path
           required: true
           schema:
             type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AttachExtractionInput"
+            minimum: 1
+        - name: sessionId
+          in: query
+          required: false
+          description: Export only this reading session when provided.
+          schema:
+            $ref: "#/components/schemas/ExportTechnicalReportQuery"
       responses:
-        "201":
-          description: Attached
+        "200":
+          description: Editable Word technical report attachment
+          content:
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid systemId or sessionId
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StartupReport"
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: System not found, deleted, or session does not belong to the system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Report generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /systems/{systemId}/startup-reports:
     get:
@@ -223,7 +283,8 @@ paths:
     post:
       operationId: uploadStartupReport
       tags: [startup-reports]
-      summary: Upload and process a startup report PDF
+      summary: Upload and process a startup report (PDF, JPG, PNG or WebP)
+      description: Accepts PDF or image files up to 50 MB. The AI extracts baseline data from text and/or rendered pages via GPT-4o Vision.
       parameters:
         - name: systemId
           in: path
@@ -463,8 +524,68 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnalysisResult"
 
+  /manufacturer-guide:
+    get:
+      operationId: getManufacturerGuideMetadata
+      tags: [reading-sessions]
+      summary: Metadata for the bundled LG Multi V 5 troubleshooting excerpt
+      responses:
+        "200":
+          description: Bundled guide metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManufacturerGuideMetadata"
+
+  /manufacturer-guide/pdf:
+    get:
+      operationId: getManufacturerGuidePdf
+      tags: [reading-sessions]
+      summary: Download the bundled manufacturer excerpt PDF
+      responses:
+        "200":
+          description: PDF source
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /manufacturer-guide/pages/{page}:
+    get:
+      operationId: getManufacturerGuidePage
+      tags: [reading-sessions]
+      summary: Get one page image from the bundled manufacturer excerpt
+      parameters:
+        - name: page
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 66
+      responses:
+        "200":
+          description: Original page image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+
 components:
   schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    ExportTechnicalReportQuery:
+      type: integer
+      minimum: 1
+
     HealthStatus:
       type: object
       properties:
@@ -475,7 +596,7 @@ components:
 
     VrfSystem:
       type: object
-      required: [id, code, name, vrfType, createdAt]
+      required: [id, code, name, category, vrfType, createdAt]
       properties:
         id:
           type: integer
@@ -483,6 +604,11 @@ components:
           type: string
         name:
           type: string
+        category:
+          type: string
+          enum: [escritorios_xp, espacos_xp]
+        deletedAt:
+          type: ["string", "null"]
         location:
           type: ["string", "null"]
         floor:
@@ -513,7 +639,7 @@ components:
 
     VrfSystemInput:
       type: object
-      required: [code, name, vrfType]
+      required: [code, name, vrfType, category]
       properties:
         code:
           type: string
@@ -521,6 +647,9 @@ components:
         name:
           type: string
           minLength: 1
+        category:
+          type: string
+          enum: [escritorios_xp, espacos_xp]
         location:
           type: string
         floor:
@@ -549,6 +678,9 @@ components:
           type: string
         name:
           type: string
+        category:
+          type: string
+          enum: [escritorios_xp, espacos_xp]
         location:
           type: string
         floor:
@@ -619,7 +751,7 @@ components:
 
     SystemSummary:
       type: object
-      required: [system, totalSessions, latestHealthStatus, parameterTrends]
+      required: [system, totalSessions, latestHealthStatus, parameterTrends, hasStartupReport, usingLgReference]
       properties:
         system:
           $ref: "#/components/schemas/VrfSystem"
@@ -633,6 +765,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ParameterTrend"
+        hasStartupReport:
+          type: boolean
+          description: True quando existe ao menos um relatorio de partida processado com sucesso para o sistema.
+        usingLgReference:
+          type: boolean
+          description: True quando o sistema vai utilizar a tabela referencia LG como baseline padrao (condensacao a Ar e sem relatorio de partida processado).
 
     ParameterTrend:
       type: object
@@ -666,7 +804,7 @@ components:
         filename:
           type: string
         fileUrl:
-          type: string
+          type: ["string", "null"]
         uploadedAt:
           type: string
         processingStatus:
@@ -684,58 +822,6 @@ components:
         file:
           type: string
           format: binary
-
-    ExtractedSystemFormData:
-      type: object
-      properties:
-        code:
-          type: ["string", "null"]
-        name:
-          type: ["string", "null"]
-        building:
-          type: ["string", "null"]
-        location:
-          type: ["string", "null"]
-        floor:
-          type: ["string", "null"]
-        servedArea:
-          type: ["string", "null"]
-        model:
-          type: ["string", "null"]
-        vrfType:
-          type: ["string", "null"]
-          enum: [multi_v_ii, multi_v_iii, multi_v_iv, multi_v_5, null]
-        condensationType:
-          type: ["string", "null"]
-          enum: [air, water, null]
-        startupDate:
-          type: ["string", "null"]
-        notes:
-          type: ["string", "null"]
-
-    ExtractStartupPdfResult:
-      type: object
-      required: [fileToken, originalFilename, formData]
-      properties:
-        fileToken:
-          type: string
-        originalFilename:
-          type: string
-        formData:
-          $ref: "#/components/schemas/ExtractedSystemFormData"
-        baselineData:
-          type: ["object", "null"]
-
-    AttachExtractionInput:
-      type: object
-      required: [fileToken, originalFilename]
-      properties:
-        fileToken:
-          type: string
-        originalFilename:
-          type: string
-        baselineData:
-          type: ["object", "null"]
 
     ReadingSession:
       type: object
@@ -882,3 +968,95 @@ components:
             type: string
         maintenanceRequired:
           type: boolean
+        manufacturerGuide:
+          $ref: "#/components/schemas/ManufacturerGuide"
+
+    ManufacturerGuideMetadata:
+      type: object
+      required: [version, documentId, title, year, language, scope, pageCount, printedPageRange, pdfUrl, pageUrlTemplate]
+      properties:
+        version:
+          type: integer
+          const: 1
+        documentId:
+          type: string
+          const: lg-multi-v5-troubleshooting-2021
+        title:
+          type: string
+        year:
+          type: integer
+          const: 2021
+        language:
+          type: string
+          const: en
+        scope:
+          type: string
+        pageCount:
+          type: integer
+          const: 66
+        printedPageRange:
+          type: string
+        pdfUrl:
+          type: string
+        pageUrlTemplate:
+          type: string
+
+    ManufacturerGuide:
+      type: object
+      required: [version, documentId, title, status, safetyNotice, references, procedures]
+      properties:
+        version:
+          type: integer
+          const: 1
+        documentId:
+          type: string
+          const: lg-multi-v5-troubleshooting-2021
+        title:
+          type: string
+        status:
+          type: string
+          enum: [grounded, no_match, not_applicable, unavailable]
+        reason:
+          type: string
+        safetyNotice:
+          type: string
+        references:
+          type: array
+          items:
+            type: object
+            required: [page, printedPage, title]
+            properties:
+              page:
+                type: integer
+              printedPage:
+                type: string
+              title:
+                type: string
+        procedures:
+          type: array
+          items:
+            type: object
+            required: [title, evidence, steps]
+            properties:
+              title:
+                type: string
+              evidence:
+                type: string
+              steps:
+                type: array
+                items:
+                  type: object
+                  required: [instruction, expectedResult, onPass, onFail, page, sourceQuote]
+                  properties:
+                    instruction:
+                      type: string
+                    expectedResult:
+                      type: string
+                    onPass:
+                      type: string
+                    onFail:
+                      type: string
+                    page:
+                      type: integer
+                    sourceQuote:
+                      type: string

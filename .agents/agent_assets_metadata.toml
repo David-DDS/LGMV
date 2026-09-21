@@ -1,0 +1,24 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "vTzv17_liUyW_mZwylyRB"
+uri = "file://artifacts/vrf-project-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "Trilha instrumental do vídeo"
+description = "Generated music: Instrumental driving electronic background music for a professional HVAC monitoring and AI technical software Instagram Reel. Warm precise synth pulses, restrained bass and crisp per…"
+logical_id = "c7450d68-9610-4591-b5eb-7634c1001ee6"
+
+[[outputs]]
+id = "0gED70gax26bMbf6VPK5m"
+uri = "file://attached_assets/entrega_vrf/VRF_Monitor_Editavel.pptx"
+type = "slides"
+title = "VRF Monitor — arquivo editável"
+description = "PowerPoint vertical 9:16 com seis cenas, textos e formas editáveis, imagens substituíveis e intervalos totalizando 42 segundos. Adaptação do vídeo; as animações originais não são preservadas."
+logical_id = "6d431d5f-bf41-4f59-8ce4-3402db32f119"
+content_hash = "sha256:ca1480bc6bb6104169b3540f50df4ec9ff9894342bbece4540be30371c827bb6"
+size = 375583
+mtime_ms = 1789581935095
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:5a4e512f-ce33-49db-9408-961b01c960ad/6d431d5f-bf41-4f59-8ce4-3402db32f119/dc4edc49-fa87-4187-8ea9-91f310c81616"
+storage_version_token = "1789581941547410"
+content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"

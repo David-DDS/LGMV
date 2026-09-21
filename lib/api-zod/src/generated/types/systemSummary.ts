@@ -16,4 +16,8 @@ export interface SystemSummary {
   /** @nullable */
   latestAnalysis?: string | null;
   parameterTrends: ParameterTrend[];
+  /** True quando existe ao menos um relatorio de partida processado com sucesso para o sistema. */
+  hasStartupReport: boolean;
+  /** True quando o sistema vai utilizar a tabela referencia LG como baseline padrao (condensacao a Ar e sem relatorio de partida processado). */
+  usingLgReference: boolean;
 }

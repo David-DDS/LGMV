@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 
 import Dashboard from "@/pages/dashboard";
 import SystemsList from "@/pages/systems/index";
+import TrashPage from "@/pages/systems/trash";
 import NewSystem from "@/pages/systems/new";
 import EditSystem from "@/pages/systems/edit";
 import SystemDetail from "@/pages/systems/detail";
@@ -33,6 +34,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/systems" component={SystemsList} />
+        <Route path="/systems/trash" component={TrashPage} />
         <Route path="/systems/new" component={NewSystem} />
         <Route path="/systems/:systemId/edit" component={EditSystem} />
         <Route path="/systems/:systemId" component={SystemDetail} />

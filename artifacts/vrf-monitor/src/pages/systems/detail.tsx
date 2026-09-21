@@ -9,6 +9,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { HealthBadge } from "@/components/health-badge";
+import { TechnicalReportButton } from "@/components/technical-report-button";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
@@ -83,8 +84,13 @@ export default function SystemDetail() {
   const [isDragging, setIsDragging] = useState(false);
 
   const uploadFile = async (file: File) => {
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast({ title: "Formato invalido", description: "Envie um arquivo PDF.", variant: "destructive" });
+    const allowedMimes = ["application/pdf", "image/jpeg", "image/jpg", "image/png", "image/webp"];
+    const lowerName = file.name.toLowerCase();
+    const allowedExts = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+    const mimeOk = allowedMimes.includes(file.type.toLowerCase());
+    const extOk = allowedExts.some((ext) => lowerName.endsWith(ext));
+    if (!mimeOk && !extOk) {
+      toast({ title: "Formato invalido", description: "Envie PDF, JPG, PNG ou WebP.", variant: "destructive" });
       return;
     }
     if (file.size > 50 * 1024 * 1024) {
@@ -144,7 +150,13 @@ export default function SystemDetail() {
 
   const handleDelete = () => {
     deleteSystem.mutate({ systemId }, {
-      onSuccess: () => { toast({ title: "Sistema removido" }); setLocation("/systems"); },
+      onSuccess: () => {
+        toast({
+          title: "Sistema movido para a lixeira",
+          description: "Voce pode restaura-lo em ate 30 dias antes da exclusao permanente.",
+        });
+        setLocation("/systems");
+      },
       onError: (err) => toast({ title: "Erro ao remover", description: extractApiError(err, "Tente novamente."), variant: "destructive" }),
     });
   };
@@ -154,7 +166,7 @@ export default function SystemDetail() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-3 duration-500">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-start gap-4 min-w-0">
           <Link href="/systems">
             <Button variant="outline" size="icon" className="h-9 w-9 border-border/50 bg-card hover:bg-muted/30 shrink-0 mt-1">
@@ -172,6 +184,7 @@ export default function SystemDetail() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+        <TechnicalReportButton systemId={systemId} />
         <Link href={`/systems/${systemId}/edit`}>
           <Button variant="outline" size="sm" className="border-border/50 bg-card hover:bg-muted/30">
             <Pencil className="h-4 w-4 md:mr-2" />
@@ -187,15 +200,15 @@ export default function SystemDetail() {
           </DialogTrigger>
           <DialogContent className="border-border/50 bg-card">
             <DialogHeader>
-              <DialogTitle>Remover sistema?</DialogTitle>
+              <DialogTitle>Mover para a lixeira?</DialogTitle>
               <DialogDescription className="text-muted-foreground">
-                Esta acao nao pode ser desfeita. Todos os dados deste sistema serao permanentemente removidos.
+                O sistema sera movido para a lixeira e podera ser restaurado em ate 30 dias. Apos esse prazo, sera excluido permanentemente junto com seus relatorios e leituras.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" className="border-border/50" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
               <Button variant="destructive" onClick={handleDelete} disabled={deleteSystem.isPending}>
-                {deleteSystem.isPending ? "Removendo..." : "Remover Sistema"}
+                {deleteSystem.isPending ? "Movendo..." : "Mover para Lixeira"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -255,8 +268,10 @@ export default function SystemDetail() {
             {summary?.latestAnalysis ? (
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60 mb-2">Ultimo Diagnostico</p>
-                <div className="p-3.5 rounded-xl bg-muted/20 border border-border/40 text-xs text-muted-foreground leading-relaxed line-clamp-5">
-                  {summary.latestAnalysis}
+                <div className="p-3.5 rounded-xl bg-muted/20 border border-border/40 text-xs text-muted-foreground leading-relaxed line-clamp-5 break-words overflow-hidden max-h-32">
+                  {summary.latestAnalysis.length > 500
+                    ? summary.latestAnalysis.slice(0, 500) + "..."
+                    : summary.latestAnalysis}
                 </div>
               </div>
             ) : (
@@ -345,8 +360,39 @@ export default function SystemDetail() {
         <TabsContent value="reports" className="mt-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold">Relatorios de Partida</h2>
-            <input type="file" accept="application/pdf,.pdf" className="hidden" ref={fileInputRef} onChange={handleUploadReport} />
+            <input
+              type="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleUploadReport}
+            />
           </div>
+
+          {summary?.usingLgReference && (
+            <Card className="border-[#FF6200]/30 bg-[#FF6200]/[0.05]">
+              <CardContent className="p-4 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-[#FF6200]/15 flex items-center justify-center shrink-0">
+                  <FileCheck className="h-4 w-4 text-[#FF6200]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">Sem relatorio de partida — usando Tabela Referencia LG</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Como este sistema e de condensacao a Ar, a IA usara a tabela de parametros base LGMV da LG como baseline padrao nas analises de leitura. Voce ainda pode anexar um relatorio de partida proprio a qualquer momento.
+                  </p>
+                  <a
+                    href="/lg-reference-table.png"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-[#FF6200] hover:underline"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Ver tabela referencia LG
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Drag-and-drop dropzone */}
           <div
@@ -373,10 +419,10 @@ export default function SystemDetail() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm">
-                {isUploading ? "Enviando..." : isDragging ? "Solte o arquivo aqui" : "Arraste um PDF ou clique para selecionar"}
+                {isUploading ? "Enviando..." : isDragging ? "Solte o arquivo aqui" : "Arraste um PDF ou imagem, ou clique para selecionar"}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Apenas arquivos PDF, ate 50 MB. A IA extrai o baseline automaticamente.
+                PDF, JPG, PNG ou WebP (ate 50 MB). A IA extrai o baseline automaticamente.
               </p>
             </div>
             {!isUploading && !isDragging && (
@@ -416,10 +462,16 @@ export default function SystemDetail() {
                              <FileText className="h-5 w-5 text-muted-foreground/60" />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <a href={report.fileUrl} target="_blank" rel="noopener noreferrer"
-                              className="font-semibold text-sm truncate hover:text-[#FF6200] transition-colors block">
-                              {report.filename}
-                            </a>
+                            {report.fileUrl ? (
+                              <a href={report.fileUrl} target="_blank" rel="noopener noreferrer"
+                                className="font-semibold text-sm truncate hover:text-[#FF6200] transition-colors block">
+                                {report.filename}
+                              </a>
+                            ) : (
+                              <span className="font-semibold text-sm truncate block" title="PDF descartado apos extracao">
+                                {report.filename}
+                              </span>
+                            )}
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {format(new Date(report.uploadedAt), "d 'de' MMM 'de' yyyy 'as' HH:mm", { locale: ptBR })}
                             </p>
@@ -459,9 +511,11 @@ export default function SystemDetail() {
                         </div>
                       </div>
                       {isError && report.errorMessage && (
-                        <div className="mt-3 ml-14 px-3 py-2 rounded-lg bg-red-400/5 border border-red-400/15 text-[11px] text-red-300/90 leading-relaxed">
+                        <div className="mt-3 ml-14 px-3 py-2 rounded-lg bg-red-400/5 border border-red-400/15 text-[11px] text-red-300/90 leading-relaxed max-h-32 overflow-y-auto break-words">
                           <span className="font-semibold text-red-400">Detalhe do erro: </span>
-                          {report.errorMessage}
+                          {report.errorMessage.length > 400
+                            ? report.errorMessage.slice(0, 400) + "..."
+                            : report.errorMessage}
                         </div>
                       )}
                       {isDone && report.extractedData && (
